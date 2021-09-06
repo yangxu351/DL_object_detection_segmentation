@@ -1,0 +1,160 @@
+import argparse
+import os
+import glob
+import json
+import pandas as pd
+
+import re
+from PIL import Image
+
+def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', workbase_data_dir='syn_wdt_vockit'):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--syn_base_dir", type=str,
+                        help="base path of synthetic data",
+                        default='/data/users/yang/data/synthetic_data_wdt')
+    parser.add_argument("--syn_data_dir", type=str,
+                        help="Path to folder containing synthetic images and annos ",
+                        default='{}/{}')
+    parser.add_argument("--syn_data_imgs_dir", type=str,
+                        help="Path to folder containing synthetic images .jpg \{cmt\}/{cmt}_images",
+                        default='{}/{}_images')     
+    parser.add_argument("--syn_data_segs_dir", type=str, default='{}/{}_annos_dilated',
+                        help="Path to folder containing synthetic SegmentationClass .jpg \{cmt\}/{cmt}_annos_dilated")  
+
+    parser.add_argument("--syn_yolo_annos_dir", type=str, default='{}/{}_txt_xcycwh/minr{}_linkr{}_px{}whr{}_all_annos_txt',
+                        help="syn bbox label.txt cid xc yc w h \{syn_base_dir\}/{cmt}_txt_xcycwh")
+
+    parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
+                        help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
+
+    parser.add_argument("--syn_box_dir", type=str, default='{}/{}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox',
+                        help="syn box on image files \{syn_base_dir\}/{cmt}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")
+
+    parser.add_argument("--workdir_data", type=str, default='{}/{}',
+                        help="workdir data base synwdt syn_wdt_vockit/\{cmt\}")
+    # parser.add_argument("--workdir_imgsets", type=str, default='{}/ImageSets',
+    #                     help="ImageSets folder")
+    parser.add_argument("--workdir_main", type=str, default='{}/Main',
+                        help="\{workdir_data\}/Main ")                
+    # parser.add_argument("--workdir_imgs", type=str, default='{}/JPEGImages',
+    #                     help="JPEGImages folder")
+    # parser.add_argument("--workdir_annos", type=str, default='{}/Annotations',
+    #                     help="Annotations folder")
+    # parser.add_argument("--workdir_segs", type=str, default='{}/SegmentationClass',
+    #                     help="SegmentationClass folder")
+    parser.add_argument("--min_region", type=int, default=10, help="the smallest #pixels (area) to form an object")
+    parser.add_argument("--link_r", type=int, default=10,
+                        help="the #pixels between two connected components to be grouped")
+    parser.add_argument("--px_thres", type=int, default=12, help="the smallest #pixels to form an edge")
+    parser.add_argument("--whr_thres", type=int, default=5,
+                        help="ratio threshold of w/h or h/w")                        
+    args = parser.parse_args()
+    args.syn_data_dir = args.syn_data_dir.format(args.syn_base_dir, cmt)
+    args.syn_data_imgs_dir = args.syn_data_imgs_dir.format(args.syn_data_dir, cmt)
+    args.syn_data_segs_dir = args.syn_data_segs_dir.format(args.syn_data_dir, cmt)
+
+    args.syn_yolo_annos_dir = args.syn_yolo_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+    args.syn_voc_annos_dir = args.syn_voc_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+    args.syn_box_dir = args.syn_box_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+
+    args.workdir_data = args.workdir_data.format(workbase_data_dir, cmt)
+    # args.workdir_imgsets = args.workdir_imgsets.format(args.workdir_data)
+    args.workdir_main = args.workdir_main.format(args.workdir_data)
+    # args.workdir_imgs = args.workdir_imgs.format(args.workdir_data)
+    # args.workdir_annos = args.workdir_annos.format(args.workdir_data)
+    # args.workdir_segs = args.workdir_segs.format(args.workdir_data)
+
+    if not os.path.exists(args.syn_voc_annos_dir):
+        os.makedirs(args.syn_voc_annos_dir)
+    if not os.path.exists(args.workdir_data):
+        os.makedirs(args.workdir_data)
+    if not os.path.exists(args.workdir_main):
+        os.makedirs(args.workdir_main)        
+    return args
+
+
+
+def is_non_zero_file(fpath):
+    return os.path.isfile(fpath) and os.path.getsize(fpath) > 0
+
+
+def convert_yolo_to_xml(cmt, syn='True'):
+    args = get_arg(cmt=cmt)
+    syn_images = glob.glob(os.path.join(args.syn_data_imgs_dir, '*.jpg'))
+    print('images', len(syn_images))
+    # img_names= [os.path.basename(f) for f in syn_images]
+    syn_yolo_annos_files = glob.glob(os.path.join(args.syn_yolo_annos_dir, '*.txt'))
+    print('annos', len(syn_yolo_annos_files))
+    # yolo_classes_dict = json.load(open(os.path.join('pytorch_object_detection/faster_rcnn', 'wdt_classes.json')))
+    # cls_values = list(yolo_classes_dict.values())
+    # print('cls_values', cls_values)
+    for ix, f in enumerate(syn_images):
+        img_name = os.path.basename(f)
+        orig_img = Image.open(f)
+        image_width = orig_img.width
+        image_height = orig_img.height
+
+        lbl_name = img_name.replace('.jpg', '.txt')
+        lbl_file = os.path.join(args.syn_yolo_annos_dir, lbl_name)
+        xml_file = open(os.path.join(args.syn_voc_annos_dir, img_name.replace('.jpg', '.xml')), 'w')
+        xml_file.write('<annotation>\n')
+        xml_file.write('\t<folder>'+ cmt +'</folder>\n')
+        xml_file.write('\t<filename>' + img_name + '</filename>\n')
+        xml_file.write('\t<path>' + lbl_file + '</path>\n')
+        xml_file.write('\t<source>\n')
+        xml_file.write('\t\t<database>Unknown</database>\n')
+        xml_file.write('\t</source>\n')
+        xml_file.write('\t<size>\n')
+        xml_file.write('\t\t<width>' + str(image_width) + '</width>\n')
+        xml_file.write('\t\t<height>' + str(image_height) + '</height>\n')
+        xml_file.write('\t\t<depth>3</depth>\n') # assuming a 3 channel color image (RGB)
+        xml_file.write('\t</size>\n')
+        
+        if is_non_zero_file(lbl_file):
+            xml_file.write('\t<segmented>'+ str(1) +'</segmented>\n')
+        
+            lbl_arr = pd.read_csv(lbl_file, sep=' ', header=None, index_col=None).to_numpy()
+            for j in range(lbl_arr.shape[0]):
+                # class_number = int(lbl[0]) + 1
+                object_name = 'windturbine'
+                x_yolo = float(lbl_arr[j, 1])
+                y_yolo = float(lbl_arr[j, 2])
+                yolo_width = float(lbl_arr[j, 3])
+                yolo_height = float(lbl_arr[j, 4])
+
+                # Convert Yolo Format to Pascal VOC format
+                box_width = yolo_width * image_width
+                box_height = yolo_height * image_height
+                x_min = str(int(x_yolo * image_width - (box_width / 2)))
+                y_min = str(int(y_yolo * image_height - (box_height / 2)))
+                x_max = str(int(x_yolo * image_width + (box_width / 2)))
+                y_max = str(int(y_yolo * image_height + (box_height / 2)))
+
+                # write each object to the file
+                xml_file.write('\t<object>\n')
+                xml_file.write('\t\t<name>' + object_name + '</name>\n')
+                xml_file.write('\t\t<pose>Unspecified</pose>\n')
+                xml_file.write('\t\t<truncated>0</truncated>\n')
+                xml_file.write('\t\t<difficult>0</difficult>\n')
+                xml_file.write('\t\t<bndbox>\n')
+                xml_file.write('\t\t\t<xmin>' + x_min + '</xmin>\n')
+                xml_file.write('\t\t\t<ymin>' + y_min + '</ymin>\n')
+                xml_file.write('\t\t\t<xmax>' + x_max + '</xmax>\n')
+                xml_file.write('\t\t\t<ymax>' + y_max + '</ymax>\n')
+                xml_file.write('\t\t</bndbox>\n')
+                xml_file.write('\t</object>\n')
+        else:
+            xml_file.write('\t<segmented>'+ str(0) +'</segmented>\n')
+            
+        # Close the annotation tag once all the objects have been written to the file
+        xml_file.write('</annotation>\n')
+        xml_file.close() # Close the file
+    print('finished!!!')
+
+
+if __name__ == '__main__':
+    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    args = get_arg(cmt)
+    convert_yolo_to_xml(cmt, syn='True')
+
+    
