@@ -109,8 +109,10 @@ def convert_yolo_to_xml(cmt, syn='True'):
         xml_file.write('\t\t<height>' + str(image_height) + '</height>\n')
         xml_file.write('\t\t<depth>3</depth>\n') # assuming a 3 channel color image (RGB)
         xml_file.write('\t</size>\n')
-        
-        xml_file.write('\t<segmented>'+ str(1) if syn else str(0) +'</segmented>\n')
+        if syn:
+            xml_file.write('\t<segmented>'+ str(1) +'</segmented>\n')
+        else:
+            xml_file.write('\t<segmented>'+ str(0) +'</segmented>\n')
     
         lbl_arr = pd.read_csv(f, sep=' ', header=None, index_col=None).to_numpy()
         for j in range(lbl_arr.shape[0]):
