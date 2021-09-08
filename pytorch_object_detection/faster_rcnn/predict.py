@@ -45,20 +45,20 @@ def time_synchronized():
 
 def main():
     # get devices
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     print("using {} device.".format(device))
 
     # create model
-    model = create_model(num_classes=21)
+    model = create_model(num_classes=2) # cls + bkg
 
     # load train weights
-    train_weights = "./save_weights/model.pth"
+    train_weights = "./save_weights/resNetFpn-model-14.pth"
     assert os.path.exists(train_weights), "{} file dose not exist.".format(train_weights)
     model.load_state_dict(torch.load(train_weights, map_location=device)["model"])
     model.to(device)
 
     # read class_indict
-    label_json_path = './pascal_voc_classes.json'
+    label_json_path = './wdt_classes.json'
     assert os.path.exists(label_json_path), "json file {} dose not exist.".format(label_json_path)
     json_file = open(label_json_path, 'r')
     class_dict = json.load(json_file)
