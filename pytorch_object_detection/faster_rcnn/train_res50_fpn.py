@@ -1,6 +1,6 @@
 import os
 import datetime
-
+import argparse
 import torch
 
 import transforms
@@ -41,7 +41,7 @@ def main(parser_data):
     print("Using {} device training.".format(device.type))
 
     # 用来保存coco_info的文件
-    results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    results_file = os.path.join(parser_data.result_dir, "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -50,13 +50,15 @@ def main(parser_data):
     }
 
     VOC_root = parser_data.data_path
+    syn_data_imgs_dir = parser_data.syn_data_imgs_dir
+    syn_voc_annos_dir = parser_data.syn_voc_annos_dir
     # check voc root
-    if os.path.exists(os.path.join(VOC_root, "VOCdevkit")) is False:
-        raise FileNotFoundError("VOCdevkit dose not in path:'{}'.".format(VOC_root))
+    if not os.path.exists(os.path.join(VOC_root, "Main")):
+        raise FileNotFoundError("real_syn_wdt_vockit dose not in path:'{}'.".format(os.path.join(VOC_root, "Main")))
 
     # load train data set
-    # VOCdevkit -> VOC2012 -> ImageSets -> Main -> train.txt
-    train_dataset = VOCDataSet(VOC_root, "2012", data_transform["train"], "train.txt")
+    # real_syn_wdt_vockit -> cmt ->  Main -> train.txt
+    train_dataset = VOCDataSet(VOC_root, syn_data_imgs_dir, syn_voc_annos_dir, data_transform["train"], "train.txt")
     train_sampler = None
 
     # 是否按图片相似高宽比采样图片组成batch
@@ -89,7 +91,7 @@ def main(parser_data):
 
     # load validation data set
     # VOCdevkit -> VOC2012 -> ImageSets -> Main -> val.txt
-    val_dataset = VOCDataSet(VOC_root, "2012", data_transform["val"], "val.txt")
+    val_dataset = VOCDataSet(VOC_root, syn_data_imgs_dir, syn_voc_annos_dir, data_transform["val"], "val.txt")
     val_data_set_loader = torch.utils.data.DataLoader(val_dataset,
                                                       batch_size=1,
                                                       shuffle=False,
@@ -155,33 +157,39 @@ def main(parser_data):
             'optimizer': optimizer.state_dict(),
             'lr_scheduler': lr_scheduler.state_dict(),
             'epoch': epoch}
-        torch.save(save_files, "./save_weights/resNetFpn-model-{}.pth".format(epoch))
+        torch.save(save_files, os.path.join(parser_data.weight_dir, "resNetFpn-model-{}.pth".format(epoch)))
 
     # plot loss and lr curve
     if len(train_loss) != 0 and len(learning_rate) != 0:
         from plot_curve import plot_loss_and_lr
-        plot_loss_and_lr(train_loss, learning_rate)
+        plot_loss_and_lr(train_loss, learning_rate, parser_data)
 
     # plot mAP curve
     if len(val_map) != 0:
         from plot_curve import plot_map
-        plot_map(val_map)
+        plot_map(val_map, parser_data)
 
 
 if __name__ == "__main__":
-    import argparse
+    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
 
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 训练设备类型
-    parser.add_argument('--device', default='cuda:0', help='device')
+    parser.add_argument('--device', default='cuda:3', help='device')
+     # 检测目标类别数(不包含背景)
+    parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
+    # workdir base
+    parser.add_argument('--base-root', default=f'/data/users/yang/code/deep-learning-for-image-processing/pytorch_object_detection/faster_rcnn', help='base root')
     # 训练数据集的根目录(VOCdevkit)
-    parser.add_argument('--data-path', default='./', help='dataset')
-    # 检测目标类别数(不包含背景)
-    parser.add_argument('--num-classes', default=20, type=int, help='num_classes')
-    # 文件保存地址
-    parser.add_argument('--output-dir', default='./save_weights', help='path where to save')
+    parser.add_argument('--data-path', default='{}/real_syn_wdt_vockit/{}', help='dataset')
+   # 权重文件保存地址
+    parser.add_argument('--weight_dir', default='{}/save_weights/{}', help='path where to save weight')
+    # ap pr figures文件保存地址
+    parser.add_argument('--fig_dir', default='{}/save_figures/{}', help='path where to save figures')
+    # pr results 文件保存地址
+    parser.add_argument('--result_dir', default='{}/save_results/{}', help='path where to save results')
     # 若需要接着上次训练，则指定上次训练保存权重文件地址
     parser.add_argument('--resume', default='', type=str, help='resume from checkpoint')
     # 指定接着从哪个epoch数开始训练
@@ -194,11 +202,47 @@ if __name__ == "__main__":
                         help='batch size when training.')
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
 
+    parser.add_argument("--syn_base_dir", type=str,
+                        help="base path of synthetic data",
+                        default='/data/users/yang/data/synthetic_data_wdt')
+
+    parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
+                        help="Path to folder containing synthetic images and annos \{syn_base_dir\}/{cmt}")
+
+    parser.add_argument("--syn_data_imgs_dir", type=str, default='{}/{}_images',
+                        help="Path to folder containing synthetic images .jpg \{cmt\}/{cmt}_images")   
+    parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
+                        help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
+
+    parser.add_argument("--syn_data_segs_dir", type=str, default='{}/{}_annos_dilated',
+                        help="Path to folder containing synthetic SegmentationClass .jpg \{cmt\}/{cmt}_annos_dilated")
+    parser.add_argument("--min_region", type=int, default=10, help="the smallest #pixels (area) to form an object")
+    parser.add_argument("--link_r", type=int, default=10,  help="the #pixels between two connected components to be grouped")
+    parser.add_argument("--px_thres", type=int, default=12, help="the smallest #pixels to form an edge")
+    parser.add_argument("--whr_thres", type=int, default=5, help="ratio threshold of w/h or h/w")                        
+                       
     args = parser.parse_args()
+    args.data_path = args.data_path.format(args.base_root, cmt)
+    args.weight_dir = args.weight_dir.format(args.base_root, cmt)
+    args.fig_dir = args.fig_dir.format(args.base_root, cmt)
+    args.result_dir = args.result_dir.format(args.base_root, cmt)
+
+    args.syn_data_dir = args.syn_data_dir.format(args.syn_base_dir, cmt)
+    args.syn_data_imgs_dir = args.syn_data_imgs_dir.format(args.syn_data_dir, cmt)
+    args.syn_data_segs_dir = args.syn_data_segs_dir.format(args.syn_data_dir, cmt)
+
+    args.syn_voc_annos_dir = args.syn_voc_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+
     print(args)
 
     # 检查保存权重文件夹是否存在，不存在则创建
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    if not os.path.exists(args.weight_dir):
+        os.makedirs(args.weight_dir)
+    # 检查保存figure文件夹是否存在，不存在则创建
+    if not os.path.exists(args.fig_dir):
+        os.makedirs(args.fig_dir) 
+    # 检查保存result文件夹是否存在，不存在则创建
+    if not os.path.exists(args.result_dir):
+        os.makedirs(args.result_dir) 
 
     main(args)

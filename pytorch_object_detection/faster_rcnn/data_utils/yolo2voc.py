@@ -6,30 +6,36 @@ import shutil
 
 from PIL import Image
 
-def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', workbase_data_dir='./syn_wdt_vockit'):
+def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, workbase_data_dir='./real_syn_wdt_vockit'):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--syn_base_dir", type=str,
-                        help="base path of synthetic data",
-                        default='/data/users/yang/data/synthetic_data_wdt')
-    parser.add_argument("--syn_data_dir", type=str,
-                        help="Path to folder containing synthetic images and annos ",
-                        default='{}/{}')
-    parser.add_argument("--syn_data_imgs_dir", type=str,
-                        help="Path to folder containing synthetic images .jpg \{cmt\}/{cmt}_images",
-                        default='{}/{}_images')     
-    parser.add_argument("--syn_data_segs_dir", type=str, default='{}/{}_annos_dilated',
-                        help="Path to folder containing synthetic SegmentationClass .jpg \{cmt\}/{cmt}_annos_dilated")  
+    if syn:
+        parser.add_argument("--syn_base_dir", type=str, default='/data/users/yang/data/synthetic_data_wdt',
+                            help="base path of synthetic data")
+                            
+        parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
+                            help="Path to folder containing synthetic images and annos ")
 
-    parser.add_argument("--syn_yolo_annos_dir", type=str, default='{}/{}_txt_xcycwh/minr{}_linkr{}_px{}whr{}_all_annos_txt',
-                        help="syn bbox label.txt cid xc yc w h \{syn_base_dir\}/{cmt}_txt_xcycwh")
+        parser.add_argument("--syn_data_imgs_dir", type=str, default='{}/{}_images',
+                            help="Path to folder containing synthetic images .jpg \{cmt\}/{cmt}_images")     
 
-    parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
-                        help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
+        parser.add_argument("--syn_data_segs_dir", type=str, default='{}/{}_annos_dilated',
+                            help="Path to folder containing synthetic SegmentationClass .jpg \{cmt\}/{cmt}_annos_dilated")  
 
-    parser.add_argument("--syn_box_dir", type=str, default='{}/{}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox',
-                        help="syn box on image files \{syn_base_dir\}/{cmt}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")
+        parser.add_argument("--syn_yolo_annos_dir", type=str, default='{}/{}_txt_xcycwh/minr{}_linkr{}_px{}whr{}_all_annos_txt',
+                            help="syn bbox label.txt cid xc yc w h \{syn_base_dir\}/{cmt}_txt_xcycwh")
 
-    parser.add_argument("--workdir_data", type=str, default='{}/{}', help="workdir data base synwdt ./syn_wdt_vockit/\{cmt\}")
+        parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
+                            help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
+
+        parser.add_argument("--syn_box_dir", type=str, default='{}/{}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox',
+                            help="syn box on image files \{syn_base_dir\}/{cmt}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")
+    else:
+        parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+        parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
+        parser.add_argument("--real_yolo_annos_dir", type=str, default='{}/{}_crop_label_xcycwh', help="Path to folder containing real annos of yolo format")
+        parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
+        
+    parser.add_argument("--workdir_data", type=str, default='{}/{}', help="workdir data base synwdt ./real_syn_wdt_vockit/\{cmt\}")
     parser.add_argument("--workdir_main", type=str, default='{}/Main', help="\{workdir_data\}/Main ")    
                 
     parser.add_argument("--min_region", type=int, default=10, help="the smallest #pixels (area) to form an object")
@@ -39,15 +45,23 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', workbase_dat
     parser.add_argument("--whr_thres", type=int, default=5,
                         help="ratio threshold of w/h or h/w")                        
     args = parser.parse_args()
-    args.syn_data_dir = args.syn_data_dir.format(args.syn_base_dir, cmt)
-    args.syn_data_imgs_dir = args.syn_data_imgs_dir.format(args.syn_data_dir, cmt)
-    args.syn_data_segs_dir = args.syn_data_segs_dir.format(args.syn_data_dir, cmt)
+    if syn:
+        args.syn_data_dir = args.syn_data_dir.format(args.syn_base_dir, cmt)
+        args.syn_data_imgs_dir = args.syn_data_imgs_dir.format(args.syn_data_dir, cmt)
+        args.syn_data_segs_dir = args.syn_data_segs_dir.format(args.syn_data_dir, cmt)
 
-    args.syn_yolo_annos_dir = args.syn_yolo_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
-    args.syn_voc_annos_dir = args.syn_voc_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
-    args.syn_box_dir = args.syn_box_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+        args.syn_yolo_annos_dir = args.syn_yolo_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+        args.syn_voc_annos_dir = args.syn_voc_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+        args.syn_box_dir = args.syn_box_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
 
-    args.workdir_data = args.workdir_data.format(workbase_data_dir, cmt)
+        args.workdir_data = args.workdir_data.format(workbase_data_dir, cmt)
+    else:
+        args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, cmt)
+        args.real_yolo_annos_dir = args.real_yolo_annos_dir.format(args.real_base_dir, cmt)
+        args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, cmt)
+
+        args.workdir_data = args.workdir_data.format(workbase_data_dir, cmt)
+    
     # args.workdir_imgsets = args.workdir_imgsets.format(args.workdir_data)
     args.workdir_main = args.workdir_main.format(args.workdir_data)
     # args.workdir_imgs = args.workdir_imgs.format(args.workdir_data)
@@ -68,35 +82,51 @@ def is_non_zero_file(fpath):
     return os.path.isfile(fpath) and os.path.getsize(fpath) > 0
 
 
-def convert_yolo_to_xml(cmt, syn='True'):
-    args = get_arg(cmt=cmt)
-    syn_images = glob.glob(os.path.join(args.syn_data_imgs_dir, '*.jpg'))
-    print('images', len(syn_images))
-    # img_names= [os.path.basename(f) for f in syn_images]
-    syn_yolo_annos_files = glob.glob(os.path.join(args.syn_yolo_annos_dir, '*.txt'))
-    print('annos', len(syn_yolo_annos_files))
-    syn_yolo_annos_valid_files = []
-    for l in syn_yolo_annos_files:
-        if is_non_zero_file(l):
-            syn_yolo_annos_valid_files.append(l)
-    print('valid annos', len(syn_yolo_annos_valid_files))
-    if not os.path.exists(args.syn_voc_annos_dir):
-        os.makedirs(args.syn_voc_annos_dir)
+def convert_yolo_to_xml(cmt, args, syn=True):
+    yolo_annos_valid_files = []
+    if syn:
+        syn_images = glob.glob(os.path.join(args.syn_data_imgs_dir, '*.jpg'))
+        print('images', len(syn_images))
+        # img_names= [os.path.basename(f) for f in syn_images]
+        syn_yolo_annos_files = glob.glob(os.path.join(args.syn_yolo_annos_dir, '*.txt'))
+        print('annos', len(syn_yolo_annos_files))
+        for l in syn_yolo_annos_files:
+            if is_non_zero_file(l):
+                yolo_annos_valid_files.append(l)
+
+        if not os.path.exists(args.syn_voc_annos_dir):
+            os.makedirs(args.syn_voc_annos_dir)
+        else:
+            shutil.rmtree(args.syn_voc_annos_dir)
+            os.makedirs(args.syn_voc_annos_dir)
     else:
-        shutil.rmtree(args.syn_voc_annos_dir)
-        os.makedirs(args.syn_voc_annos_dir)
-    # yolo_classes_dict = json.load(open(os.path.join('pytorch_object_detection/faster_rcnn', 'wdt_classes.json')))
-    # cls_values = list(yolo_classes_dict.values())
-    # print('cls_values', cls_values)
-    for ix, f in enumerate(syn_yolo_annos_valid_files):
+        real_images = glob.glob(os.path.join(args.real_imgs_dir, '*.jpg'))
+        print('images', len(real_images))
+        # img_names= [os.path.basename(f) for f in syn_images]
+        real_yolo_annos_files = glob.glob(os.path.join(args.real_yolo_annos_dir, '*.txt'))
+        print('annos', len(real_yolo_annos_files))
+        for l in real_yolo_annos_files:
+            if is_non_zero_file(l):
+                yolo_annos_valid_files.append(l)
+
+        if not os.path.exists(args.real_voc_annos_dir):
+            os.makedirs(args.real_voc_annos_dir)
+        else:
+            shutil.rmtree(args.real_voc_annos_dir)
+            os.makedirs(args.real_voc_annos_dir)
+
+    print('valid annos', len(yolo_annos_valid_files))
+    
+    for ix, f in enumerate(yolo_annos_valid_files):
         lbl_name = os.path.basename(f)
         img_name = lbl_name.replace('.txt', '.jpg')
-        img_file = os.path.join(args.syn_data_imgs_dir, img_name)
+        img_file = os.path.join(args.syn_data_imgs_dir if syn else args.real_imgs_dir, img_name)
+        xml_file = open(os.path.join(args.syn_voc_annos_dir if syn else args.real_voc_annos_dir, lbl_name.replace('.txt', '.xml')), 'w')
+        
         orig_img = Image.open(img_file)
         image_width = orig_img.width
         image_height = orig_img.height
 
-        xml_file = open(os.path.join(args.syn_voc_annos_dir, lbl_name.replace('.txt', '.xml')), 'w')
         xml_file.write('<annotation>\n')
         xml_file.write('\t<folder>'+ cmt +'</folder>\n')
         xml_file.write('\t<filename>' + img_name + '</filename>\n')
@@ -152,8 +182,17 @@ def convert_yolo_to_xml(cmt, syn='True'):
 
 
 if __name__ == '__main__':
-    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    args = get_arg(cmt)
-    convert_yolo_to_xml(cmt, syn='True')
+    workbase_data_dir='./real_syn_wdt_vockit'
+    ################## synthetic data
+    # cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    # syn=True
+    # args = get_arg(cmt, syn, workbase_data_dir)
+    # convert_yolo_to_xml(cmt, args, syn=True)
+
+    ################## real data
+    cmt = 'xilin_wdt'
+    syn = False
+    args = get_arg(cmt, syn, workbase_data_dir)
+    convert_yolo_to_xml(cmt, args, syn=syn)
 
     
