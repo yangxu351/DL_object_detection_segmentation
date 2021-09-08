@@ -156,10 +156,10 @@ def convert_yolo_to_xml(cmt, args, syn=True):
             # Convert Yolo Format to Pascal VOC format
             box_width = yolo_width * image_width
             box_height = yolo_height * image_height
-            x_min = str(int(x_yolo * image_width - (box_width / 2)))
-            y_min = str(int(y_yolo * image_height - (box_height / 2)))
-            x_max = str(int(x_yolo * image_width + (box_width / 2)))
-            y_max = str(int(y_yolo * image_height + (box_height / 2)))
+            x_min = str(int(round(x_yolo * image_width - (box_width / 2))))
+            y_min = str(int(round(y_yolo * image_height - (box_height / 2))))
+            x_max = str(int(round(x_yolo * image_width + (box_width / 2))))
+            y_max = str(int(round(y_yolo * image_height + (box_height / 2))))
 
             # write each object to the file
             xml_file.write('\t<object>\n')
