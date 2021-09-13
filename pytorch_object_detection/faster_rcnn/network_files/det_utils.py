@@ -1,6 +1,7 @@
 import torch
+from torch.nn import functional as F
 import math
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from torch import Tensor
 
 
@@ -326,7 +327,7 @@ class Matcher(object):
         # Max over gt elements (dim 0) to find best gt candidate for each prediction
         # M x N 的每一列代表一个anchors与所有gt的匹配iou值
         # matched_vals代表每列的最大值，即每个anchors与所有gt匹配的最大iou值
-        # matches对应最大值所在的索引
+        # matches对应最大值所在的gt索引 [1, N] col->represnets anchor; each value->represents gt index;
         matched_vals, matches = match_quality_matrix.max(dim=0)  # the dimension to reduce.
         if self.allow_low_quality_matches:
             all_matches = matches.clone()
@@ -406,3 +407,16 @@ def smooth_l1_loss(input, target, beta: float = 1. / 9, size_average: bool = Tru
     if size_average:
         return loss.mean()
     return loss.sum()
+
+
+def attention_loss(mask, featuremap):
+    # type: (List[Tensor],  Dict[str, Tensor]) -> List[int]
+    # mask:  [n,c,h,w]
+    # featuremap:[n,c,h,w]
+    
+    assert mask.ndim==4 and featuremap.ndim==4
+    pixel_pred = F.sigmoid(featuremap)
+    mask = mask.permute(0,2,3,1).reshape([-1, ])
+    pixel_pred = pixel_pred.permute(0,2,3,1).reshape([-1, ])
+    attention_loss = F.binary_cross_entropy_with_logits(pixel_pred, mask)
+    return attention_loss
