@@ -129,17 +129,17 @@ def get_syn_object_coords_after_group(dila_annos_file, min_region=20, link_r=30,
         max_w = np.int(np.round(np.max(np.where(lbl_group_map == id)[1])))
         max_h = np.int(np.round(np.max(np.where(lbl_group_map == id)[0])))
 
-        w = max_w - min_w
-        h = max_h - min_h
+        w = max_w - min_w + 1
+        h = max_h - min_h + 1
         if whr_thres and px_thres:
             whr = np.maximum(w / (h + 1e-16), h / (w + 1e-16))
-            if w <= 0 or h <= 0 or h >= lbl.shape[0]-1 or w >=lbl.shape[1] - 1:
+            if w <=1 or h <=1 or h >= lbl.shape[0] or w >=lbl.shape[1]:
                 continue
             if min_w <= 0 and (whr > whr_thres or w <= px_thres or h <= px_thres):
                 continue
             # elif min_h <= 0 and (whr > whr_thres or w <= px_thresh or h <= px_thresh):
             #     continue
-            elif max_w >= lbl.shape[1] -1  and (whr > whr_thres or w <= px_thres or h <= px_thres):
+            elif max_w >= lbl.shape[1]-1  and (whr > whr_thres or w <= px_thres or h <= px_thres):
                 continue
             # elif max_h >= lbl.shape[0] -1  and (whr > whr_thres or w <= px_thresh or h <= px_thresh):
             #     continue
