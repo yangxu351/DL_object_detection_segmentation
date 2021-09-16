@@ -95,7 +95,7 @@ def group_syn_object_annotation_to_form_xml(cmt, syn_args, syn=True):
             x_min, y_min, x_max, y_max = whwhs[j]
             # write each object to the file
             xml_file.write('\t<object>\n')
-            xml_file.write('\t\t<name>WindT*urbine</name>\n')
+            xml_file.write('\t\t<name>WindTurbine</name>\n')
             xml_file.write('\t\t<pose>Unspecified</pose>\n')
             xml_file.write('\t\t<truncated>0</truncated>\n')
             xml_file.write('\t\t<difficult>0</difficult>\n')
