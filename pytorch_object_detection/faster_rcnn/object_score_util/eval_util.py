@@ -14,7 +14,9 @@ from scipy.spatial import KDTree
 from sklearn.metrics import precision_recall_curve, average_precision_score
 
 # Own modules
-from object_score_util import misc_utils, metric_utils, vis_utils
+from .metric_util import iou_metric
+from .misc_util import load_file
+from .vis_util import compare_figures
 
 
 def display_group(reg_groups, size, img=None, need_return=False):
@@ -37,9 +39,9 @@ def display_group(reg_groups, size, img=None, need_return=False):
         return group_map
     else:
         if img:
-            vis_utils.compare_figures([img, group_map], (1, 2), fig_size=(12, 5))
+            compare_figures([img, group_map], (1, 2), fig_size=(12, 5))
         else:
-            vis_utils.compare_figures([group_map], (1, 1), fig_size=(8, 6))
+            compare_figures([group_map], (1, 1), fig_size=(8, 6))
 
 
 def get_stats_from_group(reg_group, conf_img=None):
@@ -111,7 +113,7 @@ def compute_iou(coords_a, coords_b, size):
         tile_a[coords_a[:, 0], coords_a[:, 1]] = 1
         tile_b = np.zeros(size)
         tile_b[coords_b[:, 0], coords_b[:, 1]] = 1
-        return metric_utils.iou_metric(tile_a, tile_b, divide=True)
+        return iou_metric(tile_a, tile_b, divide=True)
     else:
         return 0
 
@@ -238,7 +240,7 @@ def score(pred, lbl, min_region=5, min_th=0.5, link_r=20, eps=2, iou_th=0.5):
 def batch_score(pred_files, lbl_files, min_region=5, min_th=0.5, link_r=20, eps=2, iou_th=0.5):
     conf, true = [], []
     for pred_file, lbl_file in tqdm(zip(pred_files, lbl_files), total=len(pred_files)):
-        pred, lbl = misc_utils.load_file(pred_file), misc_utils.load_file(lbl_file)
+        pred, lbl = load_file(pred_file), load_file(lbl_file)
         conf_, true_ = score(pred, lbl, min_region, min_th, link_r, eps, iou_th)
         conf.extend(conf_)
         true.extend(true_)
@@ -255,8 +257,8 @@ if __name__ == '__main__':
     rgb_file = r'/media/ei-edl01/data/remote_sensing_data/inria/images/austin1.tif'
     lbl_file = r'/media/ei-edl01/data/remote_sensing_data/inria/gt/austin1.tif'
     conf_file = r'/hdd/Results/mrs/inria/ecresnet50_dcunet_dsinria_lre1e-04_lrd1e-04_ep50_bs7_ds50_dr0p1/austin1.npy'
-    rgb = misc_utils.load_file(rgb_file)
-    lbl_img, conf_img = misc_utils.load_file(lbl_file) / 255, misc_utils.load_file(conf_file)
+    rgb = load_file(rgb_file)
+    lbl_img, conf_img = load_file(lbl_file) / 255, load_file(conf_file)
 
     osc = ObjectScorer(min_region=5, min_th=0.5, link_r=10, eps=2)
     lbl_groups = osc.get_object_groups(lbl_img)
@@ -264,4 +266,4 @@ if __name__ == '__main__':
     print(len(lbl_groups), len(conf_groups))
     lbl_group_img = display_group(lbl_groups, lbl_img.shape[:2], need_return=True)
     conf_group_img = display_group(conf_groups, conf_img.shape[:2], need_return=True)
-    vis_utils.compare_figures([rgb, lbl_group_img, conf_group_img], (1, 3), fig_size=(15, 5))
+    compare_figures([rgb, lbl_group_img, conf_group_img], (1, 3), fig_size=(15, 5))
