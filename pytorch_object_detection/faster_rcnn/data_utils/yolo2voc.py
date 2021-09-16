@@ -6,7 +6,7 @@ import shutil
 
 from PIL import Image
 
-def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, workbase_data_dir='./real_syn_wdt_vockit'):
+def get_dir_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, workbase_data_dir='./real_syn_wdt_vockit'):
     parser = argparse.ArgumentParser()
     if syn:
         parser.add_argument("--syn_base_dir", type=str, default='/data/users/yang/data/synthetic_data_wdt',
@@ -75,7 +75,6 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, wo
     if not os.path.exists(args.workdir_main):
         os.makedirs(args.workdir_main)        
     return args
-
 
 
 def is_non_zero_file(fpath):
@@ -156,10 +155,10 @@ def convert_yolo_to_xml(cmt, args, syn=True):
             # Convert Yolo Format to Pascal VOC format
             box_width = yolo_width * image_width
             box_height = yolo_height * image_height
-            x_min = str(int(round(x_yolo * image_width - (box_width / 2))))
-            y_min = str(int(round(y_yolo * image_height - (box_height / 2))))
-            x_max = str(int(round(x_yolo * image_width + (box_width / 2))))
-            y_max = str(int(round(y_yolo * image_height + (box_height / 2))))
+            x_min = int(round(x_yolo * image_width - (box_width / 2)))
+            y_min = int(round(y_yolo * image_height - (box_height / 2)))
+            x_max = int(round(x_yolo * image_width + (box_width / 2)))
+            y_max = int(round(y_yolo * image_height + (box_height / 2)))
 
             # write each object to the file
             xml_file.write('\t<object>\n')
@@ -168,10 +167,10 @@ def convert_yolo_to_xml(cmt, args, syn=True):
             xml_file.write('\t\t<truncated>0</truncated>\n')
             xml_file.write('\t\t<difficult>0</difficult>\n')
             xml_file.write('\t\t<bndbox>\n')
-            xml_file.write('\t\t\t<xmin>' + x_min + '</xmin>\n')
-            xml_file.write('\t\t\t<ymin>' + y_min + '</ymin>\n')
-            xml_file.write('\t\t\t<xmax>' + x_max + '</xmax>\n')
-            xml_file.write('\t\t\t<ymax>' + y_max + '</ymax>\n')
+            xml_file.write('\t\t\t<xmin>' + str(x_min) + '</xmin>\n')
+            xml_file.write('\t\t\t<ymin>' + str(y_min) + '</ymin>\n')
+            xml_file.write('\t\t\t<xmax>' + str(x_max) + '</xmax>\n')
+            xml_file.write('\t\t\t<ymax>' + str(y_max) + '</ymax>\n')
             xml_file.write('\t\t</bndbox>\n')
             xml_file.write('\t</object>\n')
             
@@ -184,15 +183,15 @@ def convert_yolo_to_xml(cmt, args, syn=True):
 if __name__ == '__main__':
     workbase_data_dir='./real_syn_wdt_vockit'
     ################## synthetic data
-    # cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    # syn=True
-    # args = get_arg(cmt, syn, workbase_data_dir)
-    # convert_yolo_to_xml(cmt, args, syn=True)
+    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    syn=True
+    args = get_dir_arg(cmt, syn, workbase_data_dir)
+    convert_yolo_to_xml(cmt, args, syn=True)
 
     ################## real data
-    cmt = 'xilin_wdt'
-    syn = False
-    args = get_arg(cmt, syn, workbase_data_dir)
-    convert_yolo_to_xml(cmt, args, syn=syn)
+    # cmt = 'xilin_wdt'
+    # syn = False
+    # args = get_dir_arg(cmt, syn, workbase_data_dir)
+    # convert_yolo_to_xml(cmt, args, syn=syn)
 
     
