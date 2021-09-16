@@ -1,11 +1,11 @@
 import sys
-sys.path.append('.')
+# sys.path.append('.')
 import glob
 import os
 import numpy as np
 import cv2
-
-from object_score_util import misc_utils, eval_utils
+from .misc_util import load_file
+from .eval_util import ObjectScorer, display_group
 
 IMG_FORMAT = 'png'
 TXT_FORMAT = 'txt'
@@ -62,11 +62,11 @@ def get_object_bbox_after_group(label_path, save_path, label_id=0, min_region=20
     lbl_files = [os.path.join(label_path, f) for f in lbl_files if os.path.isfile(os.path.join(label_path, f))]
     lbl_names = [os.path.basename(f) for f in lbl_files]
     
-    osc = eval_utils.ObjectScorer(min_region=min_region, min_th=0.4, link_r=link_r, eps=2) #  link_r=10
+    osc = ObjectScorer(min_region=min_region, min_th=0.4, link_r=link_r, eps=2) #  link_r=10
     for i, f in enumerate(lbl_files):
-        lbl = 1 - misc_utils.load_file(f) / 255 # h, w, c
+        lbl = 1 - load_file(f) / 255 # h, w, c
         lbl_groups = osc.get_object_groups(lbl)
-        lbl_group_map = eval_utils.display_group(lbl_groups, lbl.shape[:2], need_return=True)
+        lbl_group_map = display_group(lbl_groups, lbl.shape[:2], need_return=True)
         group_ids = np.sort(np.unique(lbl_group_map))
 
         f_txt = open(os.path.join(save_path, lbl_names[i].replace(lbl_names[i][-3:], TXT_FORMAT)), 'w')
@@ -101,3 +101,50 @@ def get_object_bbox_after_group(label_path, save_path, label_id=0, min_region=20
                 f_txt.write("%s %s %s %s %s\n" % (label_id, xcr, ycr, wr, hr))
 
         f_txt.close()        
+
+
+def get_syn_object_coords_after_group(dila_annos_file, min_region=20, link_r=30, px_thres=6, whr_thres=4):
+    '''
+    get cat id and bbox ratio based on the label file
+    group all the black pixels, and each group is assigned an id (start from 1)
+    :param dila_annos_file:
+    :param save_path:
+    :param label_id: first column
+    :param min_region: the smallest #pixels (area) to form an object
+    :param link_r: the #pixels between two connected components to be grouped
+    :param px_thresh:  the smallest #pixels of edge 
+    :param whr_thres: the largest ratio of w/h
+    :return: (xmin, ymin, xmax, ymax)
+    '''
+    
+    osc = ObjectScorer(min_region=min_region, min_th=0.4, link_r=link_r, eps=2) #  link_r=10
+    lbl = 1 - load_file(dila_annos_file) / 255 # h, w, c
+    lbl_groups = osc.get_object_groups(lbl)
+    lbl_group_map = display_group(lbl_groups, lbl.shape[:2], need_return=True)
+    group_ids = np.sort(np.unique(lbl_group_map))
+    whwhs = []
+    for id in group_ids[1:]: # exclude id==0
+        min_w = np.int(np.round(np.min(np.where(lbl_group_map == id)[1])))
+        min_h = np.int(np.round(np.min(np.where(lbl_group_map == id)[0])))
+        max_w = np.int(np.round(np.max(np.where(lbl_group_map == id)[1])))
+        max_h = np.int(np.round(np.max(np.where(lbl_group_map == id)[0])))
+
+        w = max_w - min_w
+        h = max_h - min_h
+        if whr_thres and px_thres:
+            whr = np.maximum(w / (h + 1e-16), h / (w + 1e-16))
+            if w <= 0 or h <= 0 or h >= lbl.shape[0]-1 or w >=lbl.shape[1] - 1:
+                continue
+            if min_w <= 0 and (whr > whr_thres or w <= px_thres or h <= px_thres):
+                continue
+            # elif min_h <= 0 and (whr > whr_thres or w <= px_thresh or h <= px_thresh):
+            #     continue
+            elif max_w >= lbl.shape[1] -1  and (whr > whr_thres or w <= px_thres or h <= px_thres):
+                continue
+            # elif max_h >= lbl.shape[0] -1  and (whr > whr_thres or w <= px_thresh or h <= px_thresh):
+            #     continue
+            
+        whwhs.append([min_w, min_h, max_w, max_h])
+    whwhs = np.array(whwhs)
+    return whwhs    
+            
