@@ -18,6 +18,7 @@ from object_score_util import get_bbox_coords_from_annos_with_object_score_WDT a
 
 IMG_FORMAT = '.jpg'
 TXT_FORMAT = '.txt'
+XML_FORMAT = '.xml'
 
 
 def group_syn_object_annotation_to_form_xml(cmt, syn_args, syn=True):
@@ -114,18 +115,16 @@ def group_syn_object_annotation_to_form_xml(cmt, syn_args, syn=True):
     print('finished!!!')
     
 
-def draw_bbx_on_rgb_images(cmt, px_thresh=20, whr_thres=4, suffix='_xcycwh'):
+def draw_bbx_on_rgb_images(cmt):
     img_folder_name = '{}_images'.format(cmt)
     img_path = os.path.join(syn_args.syn_data_dir, img_folder_name)
     img_files = np.sort(glob.glob(os.path.join(img_path, '*{}'.format(IMG_FORMAT))))
     img_names = [os.path.basename(f) for f in img_files]
+    print('images: ', len(img_names))
+    annos_path = syn_args.syn_voc_annos_dir
 
-    txt_folder_name = 'minr{}_linkr{}_px{}whr{}_all_annos_txt'.format(syn_args.min_region, syn_args.link_r, px_thresh, whr_thres)
-    syn_annos_dir = syn_args.syn_annos_dir + suffix
-    annos_path = os.path.join(syn_annos_dir, txt_folder_name)
-
-    bbox_folder_name = 'minr{}_linkr{}_px{}whr{}_all_images_with_bbox'.format(syn_args.min_region, syn_args.link_r, px_thresh, whr_thres)
-    syn_box_dir = syn_args.syn_box_dir + suffix
+    bbox_folder_name = 'minr{}_linkr{}_px{}whr{}_all_images_with_bbox_xml'.format(syn_args.min_region, syn_args.link_r, syn_args.px_thres, syn_args.whr_thres)
+    syn_box_dir = syn_args.syn_box_dir
     save_bbx_path = os.path.join(syn_box_dir, bbox_folder_name)
     if not os.path.exists(save_bbx_path):
         os.makedirs(save_bbx_path)
@@ -134,9 +133,11 @@ def draw_bbx_on_rgb_images(cmt, px_thresh=20, whr_thres=4, suffix='_xcycwh'):
         os.makedirs(save_bbx_path)
 
     for ix, f in enumerate(img_files[:1000]):
-        txt_file = os.path.join(annos_path, img_names[ix].replace(IMG_FORMAT, TXT_FORMAT))
-        # print('txt_file', txt_file)
-        wdt.plot_img_with_bbx(f, txt_file, save_bbx_path, label_index=False, suffix=suffix)
+        xml_file = os.path.join(annos_path, img_names[ix].replace(IMG_FORMAT, XML_FORMAT))
+        if not os.path.exists(xml_file):
+            continue
+        # print('xml_file', xml_file)
+        wdt.plot_img_with_bbx_from_xml(f, xml_file, save_bbx_path)
 
 
 def get_args(cmt='', px_thres=12, whr_thres=5):
@@ -157,9 +158,9 @@ def get_args(cmt='', px_thres=12, whr_thres=5):
     parser.add_argument("--syn_annos_dir", type=str, default='{}/{}_txt',
                         help="syn label.txt")
     parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
-                        help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
+                        help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos")     
                         
-    parser.add_argument("--syn_box_dir", type=str, default='{}/{}_gt_bbox',
+    parser.add_argument("--syn_box_dir", type=str, default='{}/{}_gt_bbox_xml',
                         help="syn box files")
     parser.add_argument("--workdir_data_txt", type=str, default='data_wdt/{}',
                         help="syn related txt files")
@@ -225,31 +226,31 @@ if __name__ == '__main__':
     ################################# 
     #######  UAV
     ######
-    px_thres= 12 
-    whr_thres= 5 
-    # cmt = 'syn_wdt_BlueSky_step60'
-    # cmt = 'syn_wdt_BlueSky_rnd_solar_rnd_cam_step100'
-    # cmt = 'syn_wdt_CloudySky_sea_sparse_rnd_solar_rnd_cam_step50'
-    # cmt = 'syn_wdt_BlueSky_rnd_solar_rnd_cam_low_lumi_no_ambi_step100'
-    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    syn_args = get_args(cmt, px_thres, whr_thres)
-    
-    group_syn_object_annotation_to_form_xml(cmt,  syn_args, syn=True)
-    
-
-    '''
-    draw bbox on rgb images for syn_background data
-    '''
-    # seed = 17
-    # px_thres= 12 # 15 # 23
-    # whr_thres= 5 # 4 # 3
+    # px_thres= 12 
+    # whr_thres= 5 
     # # cmt = 'syn_wdt_BlueSky_step60'
     # # cmt = 'syn_wdt_BlueSky_rnd_solar_rnd_cam_step100'
     # # cmt = 'syn_wdt_CloudySky_sea_sparse_rnd_solar_rnd_cam_step50'
     # # cmt = 'syn_wdt_BlueSky_rnd_solar_rnd_cam_low_lumi_no_ambi_step100'
     # cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    # syn_args = get_args(cmt)
-    # draw_bbx_on_rgb_images(cmt, px_thres, whr_thres, suffix="_xcycwh")
+    # syn_args = get_args(cmt, px_thres, whr_thres)
+    
+    # group_syn_object_annotation_to_form_xml(cmt,  syn_args, syn=True)
+    
+
+    '''
+    draw bbox on rgb images for syn_background data
+    '''
+    seed = 17
+    px_thres= 12 # 15 # 23
+    whr_thres= 5 # 4 # 3
+    # cmt = 'syn_wdt_BlueSky_step60'
+    # cmt = 'syn_wdt_BlueSky_rnd_solar_rnd_cam_step100'
+    # cmt = 'syn_wdt_CloudySky_sea_sparse_rnd_solar_rnd_cam_step50'
+    # cmt = 'syn_wdt_BlueSky_rnd_solar_rnd_cam_low_lumi_no_ambi_step100'
+    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    syn_args = get_args(cmt)
+    draw_bbx_on_rgb_images(cmt)
 
 
 

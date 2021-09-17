@@ -3,7 +3,9 @@ import sys
 import glob
 import os
 import numpy as np
+import pandas as pd
 import cv2
+from lxml import etree
 from .misc_util import load_file
 from .eval_util import ObjectScorer, display_group
 
@@ -147,4 +149,93 @@ def get_syn_object_coords_after_group(dila_annos_file, min_region=20, link_r=30,
         whwhs.append([min_w, min_h, max_w, max_h])
     whwhs = np.array(whwhs)
     return whwhs    
-            
+
+
+
+def plot_img_with_bbx(img_file, lbl_file, save_path, label_id=0, label_index=False, suffix="_xcycwh"):
+    if not is_non_zero_file(lbl_file):
+        return
+    # print(img_file)
+    img = cv2.imread(img_file) # h, w, c
+    h, w = img.shape[:2]
+
+    df_lbl = pd.read_csv(lbl_file, header=None, delimiter=' ').to_numpy() # delimiter , error_bad_lines=False
+    if suffix == "_xcycwh":
+        df_lbl[:, 1] = df_lbl[:, 1]*w
+        df_lbl[:, 3] = df_lbl[:, 3]*w
+
+        df_lbl[:, 2] = df_lbl[:, 2]*h
+        df_lbl[:, 4] = df_lbl[:, 4]*h
+
+        df_lbl[:, 1] -= df_lbl[:, 3]/2
+        df_lbl[:, 2] -= df_lbl[:, 4]/2
+
+        df_lbl[:, 3] += df_lbl[:, 1]
+        df_lbl[:, 4] += df_lbl[:, 2]
+        # print(df_lbl[:5])
+    # print(df_lbl.shape[0])
+    # df_lbl_uni = np.unique(df_lbl[:, 1:],axis=0)
+    # print('after unique ', df_lbl_uni.shape[0])
+    for ix in range(df_lbl.shape[0]):
+        cat_id = int(df_lbl[ix, 0])
+        gt_bbx = df_lbl[ix, 1:].astype(np.int64)
+        img = cv2.rectangle(img, (gt_bbx[0], gt_bbx[1]), (gt_bbx[2], gt_bbx[3]), (255, 0, 0), 2)
+        pl = ''
+        if label_index:
+            pl = '{}'.format(ix)
+        elif label_id and df_lbl.shape[1]==6:
+            mid = int(df_lbl[ix, 5])
+            pl = '{}'.format(mid)
+        elif label_id and df_lbl.shape[1]==5:
+            mid = int(df_lbl[ix, 0])
+            pl = '{}'.format(mid)
+        else:
+             pl = '{}'.format(cat_id)
+        cv2.putText(img, text=pl, org=(gt_bbx[0] + 10, gt_bbx[1] + 10),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=0.5, thickness=1, lineType=cv2.LINE_AA, color=(0, 255, 255))
+    cv2.imwrite(os.path.join(save_path, os.path.basename(img_file)), img)
+
+
+def parse_xml_to_dict(xml):
+    """
+    将xml文件解析成字典形式，参考tensorflow的recursive_parse_xml_to_dict
+    Args:
+        xml: xml tree obtained by parsing XML file contents using lxml.etree
+
+    Returns:
+        Python dictionary holding XML contents.
+    """
+
+    if len(xml) == 0:  # 遍历到底层，直接返回tag对应的信息
+        return {xml.tag: xml.text}
+
+    result = {}
+    for child in xml:
+        child_result = parse_xml_to_dict(child)  # 递归遍历标签信息
+        if child.tag != 'object':
+            result[child.tag] = child_result[child.tag]
+        else:
+            if child.tag not in result:  # 因为object可能有多个，所以需要放入列表里
+                result[child.tag] = []
+            result[child.tag].append(child_result[child.tag])
+    return {xml.tag: result}
+
+
+def plot_img_with_bbx_from_xml(img_file, xml_file, save_path):
+    # print(img_file)
+    img = cv2.imread(img_file) # h, w, c
+    with open(xml_file) as fid:
+        xml_str = fid.read()
+    xml = etree.fromstring(xml_str)
+    data_xml = parse_xml_to_dict(xml)["annotation"]
+    for obj in data_xml["object"]:
+        xmin = np.int(np.round(float(obj["bndbox"]["xmin"])))
+        xmax = np.int(np.round(float(obj["bndbox"]["xmax"])))
+        ymin = np.int(np.round(float(obj["bndbox"]["ymin"])))
+        ymax = np.int(np.round(float(obj["bndbox"]["ymax"])))
+        img = cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (255, 0, 0), 2)
+        # cv2.putText(img, org=(xmin+10, ymin+10),
+                    # fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    # fontScale=0.5, thickness=1, lineType=cv2.LINE_AA, color=(0, 255, 255))
+    cv2.imwrite(os.path.join(save_path, os.path.basename(img_file)), img)
