@@ -146,7 +146,7 @@ def convert_yolo_to_xml(cmt, args, syn=True):
         lbl_arr = pd.read_csv(f, sep=' ', header=None, index_col=None).to_numpy()
         for j in range(lbl_arr.shape[0]):
             # class_number = int(lbl[0]) + 1
-            object_name = 'windturbine'
+            object_name = 'WindTurbine'
             x_yolo = float(lbl_arr[j, 1])
             y_yolo = float(lbl_arr[j, 2])
             yolo_width = float(lbl_arr[j, 3])
@@ -183,15 +183,15 @@ def convert_yolo_to_xml(cmt, args, syn=True):
 if __name__ == '__main__':
     workbase_data_dir='./real_syn_wdt_vockit'
     ################## synthetic data
-    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    syn=True
-    args = get_dir_arg(cmt, syn, workbase_data_dir)
-    convert_yolo_to_xml(cmt, args, syn=True)
+    # cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    # syn=True
+    # args = get_dir_arg(cmt, syn, workbase_data_dir)
+    # convert_yolo_to_xml(cmt, args, syn=True)
 
     ################## real data
-    # cmt = 'xilin_wdt'
-    # syn = False
-    # args = get_dir_arg(cmt, syn, workbase_data_dir)
-    # convert_yolo_to_xml(cmt, args, syn=syn)
+    cmt = 'xilin_wdt'
+    syn = False
+    args = get_dir_arg(cmt, syn, workbase_data_dir)
+    convert_yolo_to_xml(cmt, args, syn=syn)
 
     
