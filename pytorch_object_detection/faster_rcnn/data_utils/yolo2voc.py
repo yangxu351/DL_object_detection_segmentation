@@ -32,6 +32,7 @@ def get_dir_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True
     else:
         parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
         parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
+        parser.add_argument("--real_labelme_dir", type=str, default='{}/{}_crop_label', help="Path to folder containing real images label from labelme")
         parser.add_argument("--real_yolo_annos_dir", type=str, default='{}/{}_crop_label_xcycwh', help="Path to folder containing real annos of yolo format")
         parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
         
@@ -57,6 +58,7 @@ def get_dir_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True
         args.workdir_data = args.workdir_data.format(workbase_data_dir, cmt)
     else:
         args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, cmt)
+        args.real_labelme_dir = args.real_labelme_dir.format(args.real_base_dir, cmt)
         args.real_yolo_annos_dir = args.real_yolo_annos_dir.format(args.real_base_dir, cmt)
         args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, cmt)
 
