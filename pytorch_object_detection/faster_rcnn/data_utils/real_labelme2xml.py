@@ -7,6 +7,9 @@ import math
 from PIL import Image
 import shutil
 from yolo2voc import get_dir_arg
+import sys
+sys.path.append('.')
+from object_score_util import get_bbox_coords_from_annos_with_object_score_WDT as wdt
 
 def crop_image(ori_f, shape=(608, 608), save_dir='', round_ceil='round'):
     img = np.array(Image.open(ori_f))
@@ -72,19 +75,22 @@ def resize_image(f, min_length=608, save_dir=''):
     cv2.imwrite(os.path.join(save_dir, os.path.basename(f)), new_img)
 
 
-def convert_label_string_to_int_to_xml(cmt, label_string_dir):
+def convert_label_string_to_int_to_xml(cmt):
     save_label_dir = args.real_voc_annos_dir 
     if not os.path.exists(save_label_dir):
         os.mkdir(save_label_dir)
     else:
         shutil.rmtree(save_label_dir)
         os.mkdir(save_label_dir)
+    print(save_label_dir)
     label_files = glob.glob(os.path.join(args.real_labelme_dir, '*.txt'))
     size = 608
     
     for f in label_files:
-        img_name = os.path.basename(f)
-        xml_file = open(os.path.join(label_string_dir, img_name.replace('.jpg', '.xml')), 'w')
+
+        lbl_name = os.path.basename(f)
+        img_name = lbl_name.replace('.txt', '.jpg')
+        xml_file = open(os.path.join(save_label_dir, lbl_name.replace('.txt', '.xml')), 'w')
         xml_file.write('<annotation>\n')
         xml_file.write('\t<folder>'+ cmt +'</folder>\n')
         xml_file.write('\t<filename>' + img_name + '</filename>\n')
@@ -131,6 +137,33 @@ def convert_label_string_to_int_to_xml(cmt, label_string_dir):
         xml_file.close() # Close the file
 
 
+def draw_bbx_on_rgb_images(args):
+    img_path = args.real_imgs_dir
+    img_files = np.sort(glob.glob(os.path.join(img_path, '*.jpg')))
+    img_names = [os.path.basename(f) for f in img_files]
+    print('images: ', len(img_names))
+    annos_path = args.real_voc_annos_dir
+
+    bbox_folder_name = 'minr{}_linkr{}_px{}whr{}_all_images_with_bbox_xml'.format(args.min_region, args.link_r, args.px_thres, args.whr_thres)
+    box_dir = args.real_box_dir
+    save_bbx_path = os.path.join(box_dir, bbox_folder_name)
+    if not os.path.exists(save_bbx_path):
+        os.makedirs(save_bbx_path)
+    else:
+        shutil.rmtree(save_bbx_path)
+        os.makedirs(save_bbx_path)
+
+    for ix, f in enumerate(img_files[:1000]):
+        xml_file = os.path.join(annos_path, img_names[ix].replace('.jpg', '.xml'))
+        if not os.path.exists(xml_file):
+            continue
+        # print('xml_file', xml_file)
+        wdt.plot_img_with_bbx_from_xml(f, xml_file, save_bbx_path)
+
+
 if __name__=='__main__':
-    cmt = 'xilin'
+    # cmt = 'xilin_wdt'
+    cmt = 'DJI_wdt'
     args = get_dir_arg(cmt, syn=False)
+    # convert_label_string_to_int_to_xml(cmt)
+    draw_bbx_on_rgb_images(args)
