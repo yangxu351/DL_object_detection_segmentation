@@ -7,10 +7,11 @@ from torch import nn, Tensor
 import torch.nn.functional as F
 from torchvision.ops import MultiScaleRoIAlign
 
-from .roi_head import RoIHeads
+# from .roi_head import RoIHeads
+from network_files.roi_head import RoIHeads
 from .transform import GeneralizedRCNNTransform
 from .rpn_function import AnchorsGenerator, RPNHead, RegionProposalNetwork
-
+from .mask_head import MaskHead
 
 class FasterRCNNBase(nn.Module):
     """
@@ -25,12 +26,13 @@ class FasterRCNNBase(nn.Module):
             the model
     """
 
-    def __init__(self, backbone, rpn, roi_heads, transform):
+    def __init__(self, backbone, rpn, roi_heads, transform, mask_head):
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
         self.backbone = backbone
         self.rpn = rpn
         self.roi_heads = roi_heads
+        self.mask_head = mask_head
         # used only on torchscript mode
         self._has_warned = False
 
@@ -42,13 +44,13 @@ class FasterRCNNBase(nn.Module):
 
         return detections
 
-    def forward(self, images, targets=None):
-        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
+    def forward(self, images, targets=None, masks=None):
+        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]], List[Tensor]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]], Dict[str, Tensor]]
         """
         Arguments:
             images (list[Tensor]): images to be processed
             targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
-
+            masks (list[Dict[Tensor]]): ground-truth pixle-annos images to be processed (optional)
         Returns:
             result (list[BoxList] or dict[Tensor]): the output from the model.
                 During training, it returns a dict[Tensor] which contains the losses.
@@ -79,27 +81,34 @@ class FasterRCNNBase(nn.Module):
             original_image_sizes.append((val[0], val[1]))
         # original_image_sizes = [img.shape[-2:] for img in images]
 
-        images, targets = self.transform(images, targets)  # 对图像进行预处理
+        images, targets, masks = self.transform(images, targets, masks)  # 对图像进行预处理
 
         # print(images.tensors.shape)
-        features = self.backbone(images.tensors)  # 将图像输入backbone得到特征图
+        features, mask_features = self.backbone(images.tensors, masks)  # 将图像输入backbone得到特征图
         if isinstance(features, torch.Tensor):  # 若只在一层特征层上预测，将feature放入有序字典中，并编号为‘0’
             features = OrderedDict([('0', features)])  # 若在多层特征层上预测，传入的就是一个有序字典
+        
+        losses = {}
+        
+        # 将特征层mask 以及真实的mask 传入mask_head
+        if mask_features is not None:
+            mask_losses = self.mask_head(masks, mask_features)
+            losses.update(mask_losses)
 
         # 将特征层以及标注target信息传入rpn中
         # proposals: List[Tensor], Tensor_shape: [num_proposals, 4],
         # 每个proposals是绝对坐标，且为(x1, y1, x2, y2)格式
         proposals, proposal_losses = self.rpn(images, features, targets)
-
+        
         # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
         detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
 
         # 对网络的预测结果进行后处理（主要将bboxes还原到原图像尺度上）
         detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
 
-        losses = {}
         losses.update(detector_losses)
         losses.update(proposal_losses)
+        
 
         if torch.jit.is_scripting():
             if not self._has_warned:
@@ -262,7 +271,9 @@ class FasterRCNN(FasterRCNNBase):
                  box_score_thresh=0.05, box_nms_thresh=0.5, box_detections_per_img=100,
                  box_fg_iou_thresh=0.5, box_bg_iou_thresh=0.5,   # fast rcnn计算误差时，采集正负样本设置的阈值
                  box_batch_size_per_image=512, box_positive_fraction=0.25,  # fast rcnn计算误差时采样的样本数，以及正样本占所有样本的比例
-                 bbox_reg_weights=None):
+                 bbox_reg_weights=None,
+                 # mask parameters
+                 mask_head=None):
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
                 "backbone should contain an attribute out_channels"
@@ -351,5 +362,8 @@ class FasterRCNN(FasterRCNNBase):
 
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
-
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform)
+        
+        # fast RCNN中rpn后的各个特征层
+        if mask_head is None:
+            mask_head = MaskHead()
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head)

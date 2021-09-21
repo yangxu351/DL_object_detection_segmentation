@@ -2,6 +2,9 @@ import os
 import datetime
 import argparse
 import torch
+import time
+import numpy as np
+from torch.optim import lr_scheduler
 
 import transforms
 from network_files import FasterRCNN, FastRCNNPredictor
@@ -9,7 +12,8 @@ from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import GroupedBatchSampler, create_aspect_ratio_groups
 from train_utils import train_eval_utils as utils
-
+from plot_curve import plot_loss_and_lr
+from plot_curve import plot_map
 
 def create_model(num_classes):
     # 注意，这里的backbone默认使用的是FrozenBatchNorm2d，即不会去更新bn参数
@@ -36,7 +40,7 @@ def create_model(num_classes):
     return model
 
 
-def main(parser_data):
+def main(parser_data, dir_args, train_syn=True):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
@@ -50,15 +54,22 @@ def main(parser_data):
     }
 
     VOC_root = parser_data.data_path
-    syn_data_imgs_dir = parser_data.syn_data_imgs_dir
-    syn_voc_annos_dir = parser_data.syn_voc_annos_dir
+    if train_syn:
+        data_imgs_dir = dir_args.syn_data_imgs_dir
+        voc_annos_dir = dir_args.syn_voc_annos_dir
+        data_segs_dir = dir_args.syn_data_segs_dir
+        
+    else:
+        data_imgs_dir = dir_args.real_data_imgs_dir
+        voc_annos_dir = dir_args.real_voc_annos_dir
+        data_segs_dir = ''
     # check voc root
     if not os.path.exists(os.path.join(VOC_root, "Main")):
         raise FileNotFoundError("real_syn_wdt_vockit dose not in path:'{}'.".format(os.path.join(VOC_root, "Main")))
 
     # load train data set
     # real_syn_wdt_vockit -> cmt ->  Main -> train.txt
-    train_dataset = VOCDataSet(VOC_root, syn_data_imgs_dir, syn_voc_annos_dir, data_transform["train"], "train.txt")
+    train_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, data_segs_dir, transforms=data_transform["train"], txt_name="train.txt")
     train_sampler = None
 
     # 是否按图片相似高宽比采样图片组成batch
@@ -91,7 +102,7 @@ def main(parser_data):
 
     # load validation data set
     # VOCdevkit -> VOC2012 -> ImageSets -> Main -> val.txt
-    val_dataset = VOCDataSet(VOC_root, syn_data_imgs_dir, syn_voc_annos_dir, data_transform["val"], "val.txt")
+    val_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, transforms=data_transform["val"], txt_name="val.txt")
     val_data_set_loader = torch.utils.data.DataLoader(val_dataset,
                                                       batch_size=1,
                                                       shuffle=False,
@@ -107,13 +118,23 @@ def main(parser_data):
 
     # define optimizer
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=0.005,
+    optimizer = torch.optim.SGD(params, lr=parser_data.lr,
                                 momentum=0.9, weight_decay=0.0005)
 
     # learning rate scheduler
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                    step_size=3,
                                                    gamma=0.33)
+    # fixme 
+    # lr_scheduler = utils.make_lr_scheduler(optimizer)
+
+    tb_writer = None
+    try:
+        # Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/
+        from torch.utils.tensorboard import SummaryWriter
+        tb_writer = SummaryWriter(log_dir=parser_data.log_dir)
+    except:
+        pass
 
     # 如果指定了上次训练保存的权重文件地址，则接着上次结果接着训练
     if parser_data.resume != "":
@@ -126,18 +147,27 @@ def main(parser_data):
 
     train_loss = []
     learning_rate = []
+    train_mask_loss = []
     val_map = []
 
     for epoch in range(parser_data.start_epoch, parser_data.epochs):
         # train for one epoch, printing every 10 iterations
-        mean_loss, lr = utils.train_one_epoch(model, optimizer, train_data_loader,
+        mean_loss, lr, mask_mloss = utils.train_one_epoch(model, optimizer, train_data_loader,
                                               device=device, epoch=epoch,
                                               print_freq=50, warmup=True)
         train_loss.append(mean_loss.item())
         learning_rate.append(lr)
-
+        train_mask_loss.append(mask_mloss)
         # update the learning rate
-        lr_scheduler.step()
+        lr_scheduler.step() # default one
+        # fixme--yang.xu
+        if tb_writer:
+            tb_writer.add_scalar('lr', np.array(lr_scheduler.get_last_lr())[0], epoch) 
+        # fixme--yang.xu
+        # lr_scheduler.step(mean_loss) # for ReduceLROnPlateau
+        # fixme--yang.xu
+        # if tb_writer:
+        #     tb_writer.add_scalar('lr', np.array(lr_scheduler.get_lr())[0], epoch) # get_last_lr
 
         # evaluate on the test dataset
         coco_info = utils.evaluate(model, val_data_set_loader, device=device)
@@ -145,9 +175,26 @@ def main(parser_data):
         # write into txt
         with open(results_file, "a") as f:
             # 写入的数据包括coco指标还有loss和learning rate
+            # 'loss_mask', 'loss_classifier', 'loss_box_reg', 'loss_objectness', 'loss_rpn_box_reg'
             result_info = [str(round(i, 4)) for i in coco_info + [mean_loss.item()]] + [str(round(lr, 6))]
             txt = "epoch:{} {}".format(epoch, '  '.join(result_info))
             f.write(txt + "\n")
+
+            if tb_writer:
+                tags = ['AP_IoU_0.50_0.95_area_all', 'AP_IoU_0.50_area_all', 'AP_IoU_0.75_area_all',
+                        'AP_IoU_0.50_0.95_area_small', 'AP_IoU_0.50_0.95_area_medium', 'AP_IoU_0.50_0.95_area_large', 
+                        'AR_IoU_0.50_0.95_area_all_maxDets_1', 'AR_IoU_0.50_0.95_area_all_maxDets_10', 
+                        'AR_IoU_0.50_0.95_area_all_maxDets_100', 'AR_IoU_0.50_0.95_area_small_maxDets_100', 'AR_IoU_0.50_0.95_area_medium_maxDets_100',
+                        'AR_IoU_0.50_0.95_area_large_maxDets_100', 'loss', 'lr']
+                # print('result_info', len(result_info))
+                # print('tags', len(tags))
+                dict_tag_reslut_info = {k: float(v) for k, v in zip(tags, result_info)}
+                # print('dict_tag_reslut_info', dict_tag_reslut_info)
+                tb_writer.add_scalars('IOU metric', dict_tag_reslut_info, epoch)
+                # for x, tag in zip(result_info, tags):
+                #     print('x', x)
+                #     print('tag', tag)
+                #     tb_writer.add_scalar(tag, x, epoch)
 
         val_map.append(coco_info[1])  # pascal mAP
 
@@ -159,38 +206,39 @@ def main(parser_data):
             'epoch': epoch}
         torch.save(save_files, os.path.join(parser_data.weight_dir, "resNetFpn-model-{}.pth".format(epoch)))
 
+    tb_writer.close()
     # plot loss and lr curve
     if len(train_loss) != 0 and len(learning_rate) != 0:
-        from plot_curve import plot_loss_and_lr
-        plot_loss_and_lr(train_loss, learning_rate, parser_data)
+        plot_loss_and_lr(train_loss, learning_rate, parser_data, train_mask_loss)
 
     # plot mAP curve
     if len(val_map) != 0:
-        from plot_curve import plot_map
         plot_map(val_map, parser_data)
 
 
 if __name__ == "__main__":
     cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-
+    train_syn = True
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 训练设备类型
     parser.add_argument('--device', default='cuda:3', help='device')
-     # 检测目标类别数(不包含背景)
+    # 学习率
+    parser.add_argument('--lr', default=0.05, type=float, help='learning rate')
+    # 检测目标类别数(不包含背景)
     parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
-    # workdir base
-    parser.add_argument('--base-root', default=f'/data/users/yang/code/deep-learning-for-image-processing/pytorch_object_detection/faster_rcnn', help='base root')
     # 训练数据集的根目录(VOCdevkit)
-    parser.add_argument('--data-path', default='{}/real_syn_wdt_vockit/{}', help='dataset')
-   # 权重文件保存地址
-    parser.add_argument('--weight_dir', default='{}/save_weights/{}', help='path where to save weight')
+    parser.add_argument('--data-path', default='./real_syn_wdt_vockit/{}', help='dataset')
+    # 权重文件保存地址
+    parser.add_argument('--weight_dir', default='./save_weights/{}/{}', help='path where to save weight')
+    # log文件保存地址
+    parser.add_argument('--log_dir', default='./save_logs/{}/{}', help='path where to save weight')
     # ap pr figures文件保存地址
-    parser.add_argument('--fig_dir', default='{}/save_figures/{}', help='path where to save figures')
+    parser.add_argument('--fig_dir', default='./save_figures/{}/{}', help='path where to save figures')
     # pr results 文件保存地址
-    parser.add_argument('--result_dir', default='{}/save_results/{}', help='path where to save results')
-    # 若需要接着上次训练，则指定上次训练保存权重文件地址
+    parser.add_argument('--result_dir', default='./save_results/{}/{}', help='path where to save results')
+    # 若需要接着上次训练，则指定上次训练保存权重文件地址 
     parser.add_argument('--resume', default='', type=str, help='resume from checkpoint')
     # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
@@ -202,47 +250,73 @@ if __name__ == "__main__":
                         help='batch size when training.')
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
 
-    parser.add_argument("--syn_base_dir", type=str,
-                        help="base path of synthetic data",
-                        default='/data/users/yang/data/synthetic_data_wdt')
-
-    parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
-                        help="Path to folder containing synthetic images and annos \{syn_base_dir\}/{cmt}")
-
-    parser.add_argument("--syn_data_imgs_dir", type=str, default='{}/{}_images',
-                        help="Path to folder containing synthetic images .jpg \{cmt\}/{cmt}_images")   
-    parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
-                        help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
-
-    parser.add_argument("--syn_data_segs_dir", type=str, default='{}/{}_annos_dilated',
-                        help="Path to folder containing synthetic SegmentationClass .jpg \{cmt\}/{cmt}_annos_dilated")
-    parser.add_argument("--min_region", type=int, default=10, help="the smallest #pixels (area) to form an object")
-    parser.add_argument("--link_r", type=int, default=10,  help="the #pixels between two connected components to be grouped")
-    parser.add_argument("--px_thres", type=int, default=12, help="the smallest #pixels to form an edge")
-    parser.add_argument("--whr_thres", type=int, default=5, help="ratio threshold of w/h or h/w")                        
-                       
     args = parser.parse_args()
-    args.data_path = args.data_path.format(args.base_root, cmt)
-    args.weight_dir = args.weight_dir.format(args.base_root, cmt)
-    args.fig_dir = args.fig_dir.format(args.base_root, cmt)
-    args.result_dir = args.result_dir.format(args.base_root, cmt)
-
-    args.syn_data_dir = args.syn_data_dir.format(args.syn_base_dir, cmt)
-    args.syn_data_imgs_dir = args.syn_data_imgs_dir.format(args.syn_data_dir, cmt)
-    args.syn_data_segs_dir = args.syn_data_segs_dir.format(args.syn_data_dir, cmt)
-
-    args.syn_voc_annos_dir = args.syn_voc_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
-
+    args.data_path = args.data_path.format( cmt)
+    ####################-----------------fixme
+    time_marker = time.strftime('%Y-%m-%d_%H.%M', time.localtime())
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce+dice_{time_marker}'
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_{time_marker}'
+    folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_ReduceLROnPlateau_{time_marker}'
+    # time_marker = '2021-09-18_04.58'
+    args.weight_dir = args.weight_dir.format(cmt, folder_name)
+    args.log_dir = args.log_dir.format(cmt, folder_name)
+    args.fig_dir = args.fig_dir.format(cmt, folder_name)
+    args.result_dir = args.result_dir.format(cmt, folder_name)
+    from data_utils import yolo2voc
+    dir_args = yolo2voc.get_dir_arg(cmt, syn=train_syn)
+    print(dir_args.syn_data_segs_dir)
     print(args)
-
     # 检查保存权重文件夹是否存在，不存在则创建
     if not os.path.exists(args.weight_dir):
         os.makedirs(args.weight_dir)
+    # 检查保存log文件夹是否存在，不存在则创建
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
     # 检查保存figure文件夹是否存在，不存在则创建
     if not os.path.exists(args.fig_dir):
         os.makedirs(args.fig_dir) 
     # 检查保存result文件夹是否存在，不存在则创建
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir) 
+    
+    main(args, dir_args, train_syn)
 
-    main(args)
+
+
+
+
+
+
+
+    # parser.add_argument("--syn_base_dir", type=str, default='/data/users/yang/data/synthetic_data_wdt',
+    #                     help="base path of synthetic data")
+
+    # parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
+    #                     help="Path to folder containing synthetic images and annos \{syn_base_dir\}/{cmt}")
+
+    # parser.add_argument("--syn_data_imgs_dir", type=str, default='{}/{}_images',
+    #                     help="Path to folder containing synthetic images .jpg \{cmt\}/{cmt}_images")   
+    # parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
+    #                     help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
+
+    # parser.add_argument("--syn_data_segs_dir", type=str, default='{}/{}_annos_dilated',
+    #                     help="Path to folder containing synthetic SegmentationClass .jpg \{cmt\}/{cmt}_annos_dilated")
+    
+    # parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+    # parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
+    # parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
+        
+    # parser.add_argument("--min_region", type=int, default=10, help="the smallest #pixels (area) to form an object")
+    # parser.add_argument("--link_r", type=int, default=10,  help="the #pixels between two connected components to be grouped")
+    # parser.add_argument("--px_thres", type=int, default=12, help="the smallest #pixels to form an edge")
+    # parser.add_argument("--whr_thres", type=int, default=5, help="ratio threshold of w/h or h/w")                        
+  
+# if train_syn:
+    #     args.syn_data_dir = args.syn_data_dir.format(args.syn_base_dir, cmt)
+    #     args.syn_data_imgs_dir = args.syn_data_imgs_dir.format(args.syn_data_dir, cmt)
+    #     args.syn_data_segs_dir = args.syn_data_segs_dir.format(args.syn_data_dir, cmt)
+
+    #     args.syn_voc_annos_dir = args.syn_voc_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
+    # else:
+    #     args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, cmt)
+    #     args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, cmt)

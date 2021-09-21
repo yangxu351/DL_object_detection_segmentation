@@ -5,11 +5,11 @@
 
 import os
 import json
-
+# os.path[0]
 import torch
 from tqdm import tqdm
 import numpy as np
-
+import argparse
 import transforms
 from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
@@ -89,16 +89,17 @@ def summarize(self, catId=None):
     return stats, print_info
 
 
-def main(parser_data):
+def main(parser_data, dir_args):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
     data_transform = {
         "val": transforms.Compose([transforms.ToTensor()])
     }
-
+    cdir = os.getcwd()
+    print(cdir)
     # read class_indict
-    label_json_path = './pascal_voc_classes.json'
+    label_json_path = './wdt_classes.json'
     assert os.path.exists(label_json_path), "json file {} dose not exist.".format(label_json_path)
     json_file = open(label_json_path, 'r')
     class_dict = json.load(json_file)
@@ -107,7 +108,7 @@ def main(parser_data):
 
     VOC_root = parser_data.data_path
     # check voc root
-    if os.path.exists(os.path.join(VOC_root, "VOCdevkit")) is False:
+    if not os.path.exists(os.path.join(VOC_root)):
         raise FileNotFoundError("VOCdevkit dose not in path:'{}'.".format(VOC_root))
 
     # 注意这里的collate_fn是自定义的，因为读取的数据包括image和targets，不能直接使用默认的方法合成batch
@@ -116,7 +117,7 @@ def main(parser_data):
     print('Using %g dataloader workers' % nw)
 
     # load validation data set
-    val_dataset = VOCDataSet(VOC_root, "2012", data_transform["val"], "val.txt")
+    val_dataset = VOCDataSet(VOC_root, dir_args.real_imgs_dir, dir_args.real_voc_annos_dir, transforms=data_transform["val"], txt_name="val.txt")
     val_dataset_loader = torch.utils.data.DataLoader(val_dataset,
                                                      batch_size=1,
                                                      shuffle=False,
@@ -145,7 +146,7 @@ def main(parser_data):
 
     model.eval()
     with torch.no_grad():
-        for image, targets in tqdm(val_dataset_loader, desc="validation..."):
+        for image, targets, masks in tqdm(val_dataset_loader, desc="validation..."):
             # 将图片传入指定设备device
             image = list(img.to(device) for img in image)
 
@@ -176,7 +177,7 @@ def main(parser_data):
     print(print_voc)
 
     # 将验证结果保存至txt文件中
-    with open("record_mAP.txt", "w") as f:
+    with open(os.path.join(parser_data.result_dir, "record_mAP.txt"), "w") as f:
         record_lines = ["COCO results:",
                         print_coco,
                         "",
@@ -186,7 +187,15 @@ def main(parser_data):
 
 
 if __name__ == "__main__":
-    import argparse
+    
+    real_cmt = 'xilin_wdt'
+    # real_cmt = 'DJI_wdt'
+    # folder_name = '2021-09-18_04.58'
+    folder_name = 'lr0.05_bs8_15epochs_bce_2021-09-20_04.09'
+    syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    syn = False
+    from data_utils import yolo2voc
+    dir_args = yolo2voc.get_dir_arg(real_cmt, syn)
 
     parser = argparse.ArgumentParser(
         description=__doc__)
@@ -195,18 +204,27 @@ if __name__ == "__main__":
     parser.add_argument('--device', default='cuda', help='device')
 
     # 检测目标类别数
-    parser.add_argument('--num-classes', type=int, default='20', help='number of classes')
+    parser.add_argument('--num-classes', type=int, default=1, help='number of classes')
 
     # 数据集的根目录(VOCdevkit)
-    parser.add_argument('--data-path', default='/data/', help='dataset root')
-
+    parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
+    parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
+    parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
+        
+    # pr results 文件保存地址
+    parser.add_argument('--result_dir', default=f'./save_results/{real_cmt}', help='path where to save results')
+    
     # 训练好的权重文件
-    parser.add_argument('--weights', default='./save_weights/model.pth', type=str, help='training weights')
+    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}/{folder_name}/resNetFpn-model-14.pth', type=str, help='training weights')
 
     # batch size
-    parser.add_argument('--batch_size', default=1, type=int, metavar='N',
-                        help='batch size when validation.')
+    parser.add_argument('--batch_size', default=1, type=int, metavar='N', help='batch size when validation.')
 
     args = parser.parse_args()
-
-    main(args)
+    
+    args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, real_cmt)
+    args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, real_cmt)
+    if not os.path.exists(args.result_dir):
+        os.mkdir(args.result_dir)
+    main(args, dir_args)

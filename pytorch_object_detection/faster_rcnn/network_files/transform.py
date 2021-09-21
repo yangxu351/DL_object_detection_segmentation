@@ -84,17 +84,19 @@ class GeneralizedRCNNTransform(nn.Module):
         index = int(torch.empty(1).uniform_(0., float(len(k))).item())
         return k[index]
 
-    def resize(self, image, target):
-        # type: (Tensor, Optional[Dict[str, Tensor]]) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]
+    def resize(self, image, target, mask=None):
+        # type: (Tensor, Optional[Dict[str, Tensor]], Tensor) -> Tuple[Tensor, Optional[Dict[str, Tensor]], Tensor]
         """
         将图片缩放到指定的大小范围内，并对应缩放bboxes信息
         Args:
             image: 输入的图片
             target: 输入图片的相关信息（包括bboxes信息）
+            mask: 输入图片的pixel labels
 
         Returns:
             image: 缩放后的图片
             target: 缩放bboxes后的图片相关信息
+            mask: 缩放后的图片(pixel labels)
         """
         # image shape is [channel, height, width]
         h, w = image.shape[-2:]
@@ -107,18 +109,22 @@ class GeneralizedRCNNTransform(nn.Module):
 
         if torchvision._is_tracing():
             image = _resize_image_onnx(image, size, float(self.max_size))
+            # if mask is not None:
+            #     mask = _resize_image_onnx(mask, size, float(self.max_size))
         else:
             image = _resize_image(image, size, float(self.max_size))
+            # if mask is not None:
+            #     mask = _resize_image(mask, size, float(self.max_size))
 
         if target is None:
-            return image, target
+            return image, target, mask
 
         bbox = target["boxes"]
         # 根据图像的缩放比例来缩放bbox
         bbox = resize_boxes(bbox, [h, w], image.shape[-2:])
         target["boxes"] = bbox
 
-        return image, target
+        return image, target, mask
 
     # _onnx_batch_images() is an implementation of
     # batch_images() that is supported by ONNX tracing.
@@ -231,20 +237,27 @@ class GeneralizedRCNNTransform(nn.Module):
 
     def forward(self,
                 images,       # type: List[Tensor]
-                targets=None  # type: Optional[List[Dict[str, Tensor]]]
+                targets=None,  # type: Optional[List[Dict[str, Tensor]]]
+                masks=None     # type: Optional[List[Tensor]]
                 ):
-        # type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]]]
+        # type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]], Optional[List[Tensor]]]
         images = [img for img in images]
         for i in range(len(images)):
             image = images[i]
             target_index = targets[i] if targets is not None else None
+            
 
             if image.dim() != 3:
                 raise ValueError("images is expected to be a list of 3d tensors "
                                  "of shape [C, H, W], got {}".format(image.shape))
             image = self.normalize(image)                # 对图像进行标准化处理
-            image, target_index = self.resize(image, target_index)   # 对图像和对应的bboxes缩放到指定范围
+            
+            # mask = masks[i] if masks is not None else None
+            image, target_index, mask = self.resize(image, target_index)   # 对图像和对应的bboxes缩放到指定范围
+            # if mask is not None:
+            #     masks[i] = mask 
             images[i] = image
+            
             if targets is not None and target_index is not None:
                 targets[i] = target_index
 
@@ -252,14 +265,14 @@ class GeneralizedRCNNTransform(nn.Module):
         image_sizes = [img.shape[-2:] for img in images]
         images = self.batch_images(images)  # 将images打包成一个batch
         image_sizes_list = torch.jit.annotate(List[Tuple[int, int]], [])
-
+        if masks is not None:
+            masks = self.batch_images(masks)  # 将images打包成一个batch
         for image_size in image_sizes:
             assert len(image_size) == 2
             image_sizes_list.append((image_size[0], image_size[1]))
 
         image_list = ImageList(images, image_sizes_list)
-        return image_list, targets
-
+        return image_list, targets, masks
 
 def resize_boxes(boxes, original_size, new_size):
     # type: (Tensor, List[int], List[int]) -> Tensor

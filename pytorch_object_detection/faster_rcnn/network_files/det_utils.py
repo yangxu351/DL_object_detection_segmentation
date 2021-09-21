@@ -415,8 +415,16 @@ def attention_loss(mask, featuremap):
     # featuremap:[n,c,h,w]
     
     assert mask.ndim==4 and featuremap.ndim==4
-    pixel_pred = F.sigmoid(featuremap)
+    # pixel_pred = F.sigmoid(featuremap)
+    # mask = mask.permute(0,2,3,1).reshape([-1, ])
+    # pixel_pred = pixel_pred.permute(0,2,3,1).reshape([-1, ])
+    # attention_loss = F.binary_cross_entropy(pixel_pred, mask)
     mask = mask.permute(0,2,3,1).reshape([-1, ])
-    pixel_pred = pixel_pred.permute(0,2,3,1).reshape([-1, ])
-    attention_loss = F.binary_cross_entropy_with_logits(pixel_pred, mask)
-    return attention_loss
+    featuremap = featuremap.permute(0,2,3,1).reshape([-1, ])
+    # atten_loss = F.binary_cross_entropy_with_logits(featuremap, mask)
+    # intersection = (torch.sigmoid(featuremap) * mask).sum()
+    # dice_loss = 1 - (2.*intersection + 1e-6)/(featuremap.sum() + mask.sum() + 1e-6)
+    bce_loss = F.binary_cross_entropy_with_logits(featuremap, mask)
+    # atten_loss = (bce_loss + dice_loss)/2.
+    atten_loss = bce_loss
+    return atten_loss

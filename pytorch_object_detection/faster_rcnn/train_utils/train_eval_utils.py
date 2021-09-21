@@ -3,7 +3,7 @@ import sys
 import time
 
 import torch
-
+from torch.optim import lr_scheduler
 from .coco_utils import get_coco_api_from_dataset
 from .coco_eval import CocoEvaluator
 import train_utils.distributed_utils as utils
@@ -24,16 +24,22 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
         lr_scheduler = utils.warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
 
     mloss = torch.zeros(1).to(device)  # mean losses
+    mask_mloss = torch.zeros(1).to(device)  # mean mask losses
     enable_amp = True if "cuda" in device.type else False
-    for i, [images, targets] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for i, [images, targets, masks] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         images = list(image.to(device) for image in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        if masks is not None:
+            masks = list(mask.to(device) for mask in masks)
 
         # 混合精度训练上下文管理器，如果在CPU环境中不起任何作用
         with torch.cuda.amp.autocast(enabled=enable_amp):
-            loss_dict = model(images, targets)
+            loss_dict = model(images, targets, masks)
 
             losses = sum(loss for loss in loss_dict.values())
+            
+            # loss_dict dict_keys(['loss_mask', 'loss_classifier', 'loss_box_reg', 'loss_objectness', 'loss_rpn_box_reg'])
+            # print('loss_dict', loss_dict.keys())
 
             # reduce losses over all GPUs for logging purpose
             loss_dict_reduced = utils.reduce_dict(loss_dict)
@@ -42,6 +48,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
             loss_value = losses_reduced.item()
             # 记录训练损失
             mloss = (mloss * i + loss_value) / (i + 1)  # update mean losses
+
+            mask_losses_reduced_value = loss_dict_reduced['loss_mask']
+            mask_mloss = (mask_mloss * i + mask_losses_reduced_value) / (i + 1)  # update mean losses
+
 
             if not math.isfinite(loss_value):  # 当计算的损失为无穷大时停止训练
                 print("Loss is {}, stopping training".format(loss_value))
@@ -59,7 +69,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
         now_lr = optimizer.param_groups[0]["lr"]
         metric_logger.update(lr=now_lr)
 
-    return mloss, now_lr
+    return mloss, now_lr, mask_mloss
 
 
 @torch.no_grad()
@@ -74,7 +84,7 @@ def evaluate(model, data_loader, device):
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types)
 
-    for image, targets in metric_logger.log_every(data_loader, 100, header):
+    for image, targets, masks in metric_logger.log_every(data_loader, 100, header):
         image = list(img.to(device) for img in image)
 
         # 当使用CPU时，跳过GPU相关指令
@@ -102,7 +112,6 @@ def evaluate(model, data_loader, device):
     # accumulate predictions from all images
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
-
     coco_info = coco_evaluator.coco_eval[iou_types[0]].stats.tolist()  # numpy to list
 
     return coco_info
@@ -114,3 +123,12 @@ def _get_iou_types(model):
         model_without_ddp = model.module
     iou_types = ["bbox"]
     return iou_types
+
+def make_lr_scheduler(optm):
+    """https://github.com/BensonRen/BDIMNNA
+    Make the learning rate scheduler as instructed. More modes can be added to this, current supported ones:
+    1. ReduceLROnPlateau (decrease lr when validation error stops improving
+    :return:
+    """
+    return lr_scheduler.ReduceLROnPlateau(optimizer=optm, mode='min',
+                                            patience=10, verbose=True, threshold=1e-4)

@@ -75,7 +75,8 @@ class InceptionAttention(nn.Module):
 class MaskHead(nn.Module):
     def __init__(self):# ,out_dim ,ratio
         super(MaskHead,self).__init__()
-        self.fusion_conv = nn.Conv2d(2*4, out_channels=1, kernel_size=(1, 1), stride=1)
+        # self.fusion_conv = nn.Conv2d(2*4, out_channels=1, kernel_size=(1, 1), stride=1)
+        self.fusion_conv = nn.Conv2d(4, out_channels=1, kernel_size=(1, 1), stride=1)
     
     def fusion_all_layer(self, features, h, w):
         keys = features.keys()

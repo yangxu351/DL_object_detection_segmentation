@@ -7,6 +7,7 @@ from torch.jit.annotations import List, Dict
 from torchvision.ops.misc import FrozenBatchNorm2d
 
 from .feature_pyramid_network import FeaturePyramidNetwork, LastLevelMaxPool
+from .feature_pyramid_network_with_PANet import FeaturePyramidNetworkwithPA
 
 
 class Bottleneck(nn.Module):
@@ -216,6 +217,12 @@ class BackboneWithFPN(nn.Module):
             extra_blocks = LastLevelMaxPool()
 
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
+        
+        self.fpnWithPA = FeaturePyramidNetworkwithPA(
+            in_channels_list=in_channels_list,
+            out_channels=out_channels,
+            extra_blocks=extra_blocks,
+        )
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
             out_channels=out_channels,
@@ -224,11 +231,15 @@ class BackboneWithFPN(nn.Module):
 
         self.out_channels = out_channels
 
-    def forward(self, x):
+    def forward(self, x, masks):
         x = self.body(x)
-        x = self.fpn(x)
-        return x
-
+        mask_x=None
+        if masks is not None:
+            x, mask_x = self.fpnWithPA(x)
+        else:
+            x = self.fpn(x)
+        return x, mask_x
+        
 
 def resnet50_fpn_backbone(pretrain_path="",
                           norm_layer=FrozenBatchNorm2d,  # FrozenBatchNorm2d的功能与BatchNorm2d类似，但参数无法更新
@@ -245,6 +256,7 @@ def resnet50_fpn_backbone(pretrain_path="",
         trainable_layers: 指定训练哪些层结构
         returned_layers: 指定哪些层的输出需要返回
         extra_blocks: 在输出的特征层基础上额外添加的层结构
+        pa_blocks: 
 
     Returns:
 
