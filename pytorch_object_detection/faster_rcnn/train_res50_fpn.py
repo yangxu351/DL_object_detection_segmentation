@@ -122,11 +122,11 @@ def main(parser_data, dir_args, train_syn=True):
                                 momentum=0.9, weight_decay=0.0005)
 
     # learning rate scheduler
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                   step_size=3,
-                                                   gamma=0.33)
-    # fixme 
-    # lr_scheduler = utils.make_lr_scheduler(optimizer)
+    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+    #                                                step_size=3,
+    #                                                gamma=0.33)
+    # fixme-- yang.xu
+    lr_scheduler = utils.make_lr_scheduler(optimizer)
 
     tb_writer = None
     try:
@@ -159,15 +159,15 @@ def main(parser_data, dir_args, train_syn=True):
         learning_rate.append(lr)
         train_mask_loss.append(mask_mloss)
         # update the learning rate
-        lr_scheduler.step() # default one
+        # lr_scheduler.step() # default one
+        # if tb_writer:
+        #     tb_writer.add_scalar('lr', np.array(lr_scheduler.get_last_lr())[0], epoch) 
+        
+        # fixme--yang.xu
+        lr_scheduler.step(mean_loss) # for ReduceLROnPlateau
         # fixme--yang.xu
         if tb_writer:
-            tb_writer.add_scalar('lr', np.array(lr_scheduler.get_last_lr())[0], epoch) 
-        # fixme--yang.xu
-        # lr_scheduler.step(mean_loss) # for ReduceLROnPlateau
-        # fixme--yang.xu
-        # if tb_writer:
-        #     tb_writer.add_scalar('lr', np.array(lr_scheduler.get_lr())[0], epoch) # get_last_lr
+            tb_writer.add_scalar('lr', np.array(lr_scheduler.get_lr())[0], epoch) # get_last_lr
 
         # evaluate on the test dataset
         coco_info = utils.evaluate(model, val_data_set_loader, device=device)
