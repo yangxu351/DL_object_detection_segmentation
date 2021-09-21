@@ -35,6 +35,7 @@ def get_dir_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True
         parser.add_argument("--real_labelme_dir", type=str, default='{}/{}_crop_label', help="Path to folder containing real images label from labelme")
         parser.add_argument("--real_yolo_annos_dir", type=str, default='{}/{}_crop_label_xcycwh', help="Path to folder containing real annos of yolo format")
         parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
+        parser.add_argument("--real_box_dir", type=str, default='{}/{}_crop_label_xml_bbox', help="Path to folder containing real annos of yolo format")
         
     parser.add_argument("--workdir_data", type=str, default='{}/{}', help="workdir data base synwdt ./real_syn_wdt_vockit/\{cmt\}")
     parser.add_argument("--workdir_main", type=str, default='{}/Main', help="\{workdir_data\}/Main ")    
@@ -61,6 +62,7 @@ def get_dir_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True
         args.real_labelme_dir = args.real_labelme_dir.format(args.real_base_dir, cmt)
         args.real_yolo_annos_dir = args.real_yolo_annos_dir.format(args.real_base_dir, cmt)
         args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, cmt)
+        args.real_box_dir = args.real_box_dir.format(args.real_base_dir, cmt)
 
         args.workdir_data = args.workdir_data.format(workbase_data_dir, cmt)
     
