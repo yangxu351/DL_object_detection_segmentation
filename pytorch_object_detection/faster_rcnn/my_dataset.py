@@ -4,16 +4,49 @@ import torch
 import json
 from PIL import Image
 from lxml import etree
+import numpy as np
+import cv2
+
+
+def convert_coordinate(coordinate):
+    """param coordinate: format [0,   1,     2,     3]
+    :param coordinate: format [xmin, ymin, xmax, ymax]
+    :return: format [x1, y1, x2, y2, x3, y3, x4, y4]
+    """
+    boxes = []
+    for rect in coordinate:
+        boxes.append([rect[0], rect[1], rect[2], rect[1], rect[2], rect[3], rect[0], rect[3]])
+    if len(boxes)==0:
+        return np.zeros((0,8),dtype=np.float32)
+    return np.array(boxes, dtype=np.float32)
+        
+
+def get_mask_from_bbox(h,w, boxes):
+    boxes = convert_coordinate(boxes,False)
+    mask = np.zeros([h, w])
+    for b in boxes:
+        b = np.reshape(b, [4, 2])
+        rect = np.array(b, np.int32)
+        cv2.fillConvexPoly(mask, rect, 1)
+    # mask = cv2.resize(mask, dsize=(h // 16, w // 16))
+    return np.array(mask/255., np.float32)
+
+
+def get_mask_from_seg_file(seg_file):
+    mask =  np.array(Image.open(seg_file), dtype=np.float32)
+    mask = (255-mask)/255. #becasus default mask is white BG
+    return mask
 
 
 class VOCDataSet(Dataset):
     """读取解析PASCAL VOC2007/2012数据集"""
 
-    def __init__(self, voc_root='./syn_wdt_vockit/cmt', syn_imgs_dir='', syn_voc_annos_dir='', transforms=None, txt_name: str = "train.txt"):
+    def __init__(self, voc_root='./syn_wdt_vockit/cmt', data_imgs_dir='', data_voc_annos_dir='', data_segs_dir='', transforms=None, txt_name: str = "train.txt"):
         # ./voc_root/cmt/
         self.root = voc_root
-        self.img_root = syn_imgs_dir
-        self.annotations_root = syn_voc_annos_dir
+        self.img_root = data_imgs_dir
+        self.annotations_root = data_voc_annos_dir
+        self.seg_root = data_segs_dir
 
         # read train.txt or val.txt file
         txt_path = os.path.join(self.root, "Main", txt_name)
@@ -88,10 +121,21 @@ class VOCDataSet(Dataset):
         target["area"] = area
         target["iscrowd"] = iscrowd
 
+        if self.seg_root:
+            seg_file = os.path.join(self.seg_root, data["filename"])
+            mask = get_mask_from_seg_file(seg_file)
+        else:
+            # if len(boxes):
+            #     mask = get_mask_from_bbox(image.height, image.width, boxes)
+            # else:
+                # mask = np.zeros((1, image.height, image.width))
+            mask = None # np.zeros((1, image.height, image.width))
+        
         if self.transforms is not None:
-            image, target = self.transforms(image, target)
-
-        return image, target
+            image, target, mask = self.transforms(image, target, mask)
+        
+        return image, target, mask
+    
 
     def get_height_and_width(self, idx):
         # read xml
