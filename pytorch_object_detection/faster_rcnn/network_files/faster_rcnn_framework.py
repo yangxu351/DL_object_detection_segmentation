@@ -6,6 +6,7 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 from torchvision.ops import MultiScaleRoIAlign
+from backbone.resnet50_fpn_model import BackboneWithFPN
 
 # from .roi_head import RoIHeads
 from network_files.roi_head import RoIHeads
@@ -26,7 +27,7 @@ class FasterRCNNBase(nn.Module):
             the model
     """
 
-    def __init__(self, backbone, rpn, roi_heads, transform, mask_head):
+    def __init__(self, backbone, rpn, roi_heads, transform, mask_head): 
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
         self.backbone = backbone
@@ -84,6 +85,7 @@ class FasterRCNNBase(nn.Module):
         images, targets, masks = self.transform(images, targets, masks)  # 对图像进行预处理
 
         # print(images.tensors.shape)
+        # features = self.backbone(images.tensors, masks)  # 将图像输入backbone得到特征图
         features, mask_features = self.backbone(images.tensors, masks)  # 将图像输入backbone得到特征图
         if isinstance(features, torch.Tensor):  # 若只在一层特征层上预测，将feature放入有序字典中，并编号为‘0’
             features = OrderedDict([('0', features)])  # 若在多层特征层上预测，传入的就是一个有序字典
@@ -91,7 +93,7 @@ class FasterRCNNBase(nn.Module):
         losses = {}
         
         # 将特征层mask 以及真实的mask 传入mask_head
-        if mask_features is not None:
+        if self.backbone.withPA: # masks is not None and 
             mask_losses = self.mask_head(masks, mask_features)
             losses.update(mask_losses)
 
@@ -323,11 +325,18 @@ class FasterRCNN(FasterRCNNBase):
             rpn_pre_nms_top_n, rpn_post_nms_top_n, rpn_nms_thresh,
             score_thresh=rpn_score_thresh)
 
+        # fast RCNN中rpn后的各个特征层
+        if mask_head is None:
+            # if isinstance(backbone, BackboneWithFPN):
+                # mask_head = MaskHead()
+            # else: # ResNet without FPN
+            mask_head = MaskHead(in_channels=out_channels)
+                
         #  Multi-scale RoIAlign pooling
         if box_roi_pool is None:
             box_roi_pool = MultiScaleRoIAlign(
                 featmap_names=['0', '1', '2', '3'],  # 在哪些特征层进行roi pooling
-                output_size=[7, 7],
+                output_size=  [7, 7], #[19, 19], # default  [7, 7] 
                 sampling_ratio=2)
 
         # fast RCNN中roi pooling后的展平处理两个全连接层部分
@@ -363,7 +372,4 @@ class FasterRCNN(FasterRCNNBase):
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
         
-        # fast RCNN中rpn后的各个特征层
-        if mask_head is None:
-            mask_head = MaskHead()
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head)
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head) 
