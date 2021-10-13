@@ -3,6 +3,7 @@ from torch.nn import functional as F
 import math
 from typing import List, Tuple, Dict
 from torch import Tensor
+from .focal_loss import BinaryTverskyLoss
 
 
 class BalancedPositiveNegativeSampler(object):
@@ -409,22 +410,27 @@ def smooth_l1_loss(input, target, beta: float = 1. / 9, size_average: bool = Tru
     return loss.sum()
 
 
-def attention_loss(mask, featuremap):
-    # type: (List[Tensor],  Dict[str, Tensor]) -> List[int]
+def attention_loss(featuremap, mask, type='tversky'):
+    # type: (List[Tensor],  Dict[str, Tensor], str) -> List[int]
     # mask:  [n,c,h,w]
     # featuremap:[n,c,h,w]
-    
     assert mask.ndim==4 and featuremap.ndim==4
     # pixel_pred = F.sigmoid(featuremap)
     # mask = mask.permute(0,2,3,1).reshape([-1, ])
     # pixel_pred = pixel_pred.permute(0,2,3,1).reshape([-1, ])
     # attention_loss = F.binary_cross_entropy(pixel_pred, mask)
-    mask = mask.permute(0,2,3,1).reshape([-1, ])
-    featuremap = featuremap.permute(0,2,3,1).reshape([-1, ])
+    # bs = featuremap.shape[0]
+    # cnum = featuremap.shape[1]
+    # mask = mask.permute(0,2,3,1).reshape([bs, -1, cnum])
+    # featuremap = featuremap.permute(0,2,3,1).reshape([bs, -1, cnum])
     # atten_loss = F.binary_cross_entropy_with_logits(featuremap, mask)
     # intersection = (torch.sigmoid(featuremap) * mask).sum()
     # dice_loss = 1 - (2.*intersection + 1e-6)/(featuremap.sum() + mask.sum() + 1e-6)
-    bce_loss = F.binary_cross_entropy_with_logits(featuremap, mask)
-    # atten_loss = (bce_loss + dice_loss)/2.
-    atten_loss = bce_loss
+    if type=='tversky':
+        btversky_loss = BinaryTverskyLoss()
+        binary_tversky_loss = btversky_loss(featuremap, mask)
+        atten_loss = binary_tversky_loss
+    else: ## type=='bce'
+        bce_loss = F.binary_cross_entropy_with_logits(featuremap, mask)
+        atten_loss = bce_loss
     return atten_loss
