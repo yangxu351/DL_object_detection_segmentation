@@ -15,18 +15,33 @@ from train_utils import train_eval_utils as utils
 from plot_curve import plot_loss_and_lr
 from plot_curve import plot_map
 
-def create_model(num_classes):
+def create_model(num_classes, parser_data):
     # 注意，这里的backbone默认使用的是FrozenBatchNorm2d，即不会去更新bn参数
     # 目的是为了防止batch_size太小导致效果更差(如果显存很小，建议使用默认的FrozenBatchNorm2d)
     # 如果GPU显存很大可以设置比较大的batch_size就可以将norm_layer设置为普通的BatchNorm2d
     # trainable_layers包括['layer4', 'layer3', 'layer2', 'layer1', 'conv1']， 5代表全部训练
-    backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d,
-                                     trainable_layers=3)
+    backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d, returned_layers=[1,2,3,4],
+                                     trainable_layers=3, withPA=parser_data.withPA, withFPNMask=parser_data.withFPNMask, soft_val=parser_data.soft_val)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
     model = FasterRCNN(backbone=backbone, num_classes=91)
+
     # 载入预训练模型权重
     # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
     weights_dict = torch.load("./backbone/fasterrcnn_resnet50_fpn_coco.pth", map_location='cpu')
+    # print(weights_dict.keys())
+
+    ############################
+    ##### for MultiScaleRoIAlign [7,7]-->[19, 19]
+    ############################
+    # pretrained_dict= {}
+    # for k, v in weights_dict.items():
+    #     if k == 'roi_heads.box_head.fc6.weight' or k == 'roi_heads.box_head.fc6.bias':
+    #         continue
+    #     else:
+    #         pretrained_dict[k] = v
+    # missing_keys, unexpected_keys = model.load_state_dict(pretrained_dict, strict=False)
+
+
     missing_keys, unexpected_keys = model.load_state_dict(weights_dict, strict=False)
     if len(missing_keys) != 0 or len(unexpected_keys) != 0:
         print("missing_keys: ", missing_keys)
@@ -44,9 +59,6 @@ def main(parser_data, dir_args, train_syn=True):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
-    # 用来保存coco_info的文件
-    results_file = os.path.join(parser_data.result_dir, "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
-
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
                                      transforms.RandomHorizontalFlip(0.5)]),
@@ -57,10 +69,12 @@ def main(parser_data, dir_args, train_syn=True):
     if train_syn:
         data_imgs_dir = dir_args.syn_data_imgs_dir
         voc_annos_dir = dir_args.syn_voc_annos_dir
-        data_segs_dir = dir_args.syn_data_segs_dir
-        
+        if parser_data.withPA or parser_data.withMask:
+            data_segs_dir = dir_args.syn_data_segs_dir
+        else: 
+            data_segs_dir = ''
     else:
-        data_imgs_dir = dir_args.real_data_imgs_dir
+        data_imgs_dir = dir_args.real_imgs_dir
         voc_annos_dir = dir_args.real_voc_annos_dir
         data_segs_dir = ''
     # check voc root
@@ -111,7 +125,7 @@ def main(parser_data, dir_args, train_syn=True):
                                                       collate_fn=val_dataset.collate_fn)
 
     # create model num_classes equal background + 20 classes
-    model = create_model(num_classes=parser_data.num_classes + 1)
+    model = create_model(num_classes=parser_data.num_classes + 1, parser_data=parser_data)
     # print(model)
 
     model.to(device)
@@ -122,16 +136,18 @@ def main(parser_data, dir_args, train_syn=True):
                                 momentum=0.9, weight_decay=0.0005)
 
     # learning rate scheduler
-    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-    #                                                step_size=3,
-    #                                                gamma=0.33)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                   step_size=3,
+                                                   gamma=0.33)
     # fixme-- yang.xu
-    lr_scheduler = utils.make_lr_scheduler(optimizer)
+    # lr_scheduler = utils.make_lr_scheduler(optimizer)
 
     tb_writer = None
     try:
         # Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/
         from torch.utils.tensorboard import SummaryWriter
+        if not os.path.exists(parser_data.log_dir):
+            os.makedirs(parser_data.log_dir)
         tb_writer = SummaryWriter(log_dir=parser_data.log_dir)
     except:
         pass
@@ -150,28 +166,35 @@ def main(parser_data, dir_args, train_syn=True):
     train_mask_loss = []
     val_map = []
 
+    if not os.path.exists(parser_data.result_dir):
+        os.makedirs(parser_data.result_dir) 
+    # 用来保存coco_info的文件
+    # results_file = os.path.join(parser_data.result_dir, "results_{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+    results_file = os.path.join(parser_data.result_dir, "results.txt")
+    t0 = time.time()
     for epoch in range(parser_data.start_epoch, parser_data.epochs):
         # train for one epoch, printing every 10 iterations
-        mean_loss, lr, mask_mloss = utils.train_one_epoch(model, optimizer, train_data_loader,
-                                              device=device, epoch=epoch,
+        mean_loss, lr, mask_mloss = utils.train_one_epoch(model, optimizer, train_data_loader, 
+                                              device=device, epoch=epoch, withPA=parser_data.withPA, 
                                               print_freq=50, warmup=True)
         train_loss.append(mean_loss.item())
         learning_rate.append(lr)
-        train_mask_loss.append(mask_mloss)
+        if mask_mloss is not None:
+            train_mask_loss.append(mask_mloss)
         # update the learning rate
-        # lr_scheduler.step() # default one
-        # if tb_writer:
-        #     tb_writer.add_scalar('lr', np.array(lr_scheduler.get_last_lr())[0], epoch) 
-        
-        # fixme--yang.xu
-        lr_scheduler.step(mean_loss) # for ReduceLROnPlateau
-        # fixme--yang.xu
+        lr_scheduler.step() # default one
         if tb_writer:
-            tb_writer.add_scalar('lr', np.array(lr_scheduler.get_lr())[0], epoch) # get_last_lr
+            tb_writer.add_scalar('lr', np.array(lr_scheduler.get_last_lr())[0], epoch) 
+
+        # fixme--yang.xu
+        # lr_scheduler.step(mean_loss) # for ReduceLROnPlateau
+        # # fixme--yang.xu
+        # if tb_writer:
+        #     tb_writer.add_scalar('lr', np.array(lr_scheduler.get_lr())[0], epoch) # get_last_lr
 
         # evaluate on the test dataset
         coco_info = utils.evaluate(model, val_data_set_loader, device=device)
-
+        
         # write into txt
         with open(results_file, "a") as f:
             # 写入的数据包括coco指标还有loss和learning rate
@@ -199,14 +222,18 @@ def main(parser_data, dir_args, train_syn=True):
         val_map.append(coco_info[1])  # pascal mAP
 
         # save weights
-        save_files = {
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'lr_scheduler': lr_scheduler.state_dict(),
-            'epoch': epoch}
-        torch.save(save_files, os.path.join(parser_data.weight_dir, "resNetFpn-model-{}.pth".format(epoch)))
+        if epoch % 10 == 0 or epoch >= parser_data.epochs - 1:
+            save_files = {
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'lr_scheduler': lr_scheduler.state_dict(),
+                'epoch': epoch}
+            if not os.path.exists(parser_data.weight_dir):
+                os.makedirs(parser_data.weight_dir)
+            torch.save(save_files, os.path.join(parser_data.weight_dir, "resNetFpn-model-{}.pth".format(epoch)))
 
     tb_writer.close()
+    
     # plot loss and lr curve
     if len(train_loss) != 0 and len(learning_rate) != 0:
         plot_loss_and_lr(train_loss, learning_rate, parser_data, train_mask_loss)
@@ -214,21 +241,22 @@ def main(parser_data, dir_args, train_syn=True):
     # plot mAP curve
     if len(val_map) != 0:
         plot_map(val_map, parser_data)
-
+    print('%g epochs completed in %.3f hours.\n' % (parser_data.epochs, (time.time() - t0) / 3600))
+    
 
 if __name__ == "__main__":
-    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    train_syn = True
+
+    from parameters import *
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 训练设备类型
-    parser.add_argument('--device', default='cuda:3', help='device')
+    parser.add_argument('--device', default=DEVICE, help='device')
     # 学习率
-    parser.add_argument('--lr', default=0.05, type=float, help='learning rate')
+    parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
     # 检测目标类别数(不包含背景)
     parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
-    # 训练数据集的根目录(VOCdevkit)
+    # 训练数据集的根目录(VOCdevkit)scr
     parser.add_argument('--data-path', default='./real_syn_wdt_vockit/{}', help='dataset')
     # 权重文件保存地址
     parser.add_argument('--weight_dir', default='./save_weights/{}/{}', help='path where to save weight')
@@ -243,80 +271,59 @@ if __name__ == "__main__":
     # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     # 训练的总epoch数
-    parser.add_argument('--epochs', default=15, type=int, metavar='N',
-                        help='number of total epochs to run')
+    parser.add_argument('--epochs', default=EPOCHS, type=int, metavar='N', help='number of total epochs to run')
     # 训练的batch size
-    parser.add_argument('--batch_size', default=8, type=int, metavar='N',
-                        help='batch size when training.')
+    parser.add_argument('--batch_size', default=BATCH_SIZE, type=int, metavar='N', help='batch size when training.')
+    # 是否 fpn_withMask
+    parser.add_arrgument('--withFPNMask', default=WITH_FPN_MASK, type=bool, help='True when training withMask at FPN. directly multiply the mask with layer output')
+    # fpn_withMask  or rpn_withMask
+    parser.add_argument('--soft_val', default=SOFT_VAL, type=float, help='0.5 when training withMask, mask[mask==0] == soft_val')
+    # 是否 fpn_withPA
+    parser.add_argument('--withPA', default=WITH_PA, type=bool, help='True when training withPA. which will compute mask loss in PA branch')
+
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
 
     args = parser.parse_args()
-    args.data_path = args.data_path.format( cmt)
+    args.data_path = args.data_path.format(CMT)
     ####################-----------------fixme
-    time_marker = time.strftime('%Y-%m-%d_%H.%M', time.localtime())
+    time_marker = time.strftime('%Y%m%d_%H%M', time.localtime())
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce+dice_{time_marker}'
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_{time_marker}'
-    folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_ReduceLROnPlateau_{time_marker}'
-    # time_marker = '2021-09-18_04.58'
-    args.weight_dir = args.weight_dir.format(cmt, folder_name)
-    args.log_dir = args.log_dir.format(cmt, folder_name)
-    args.fig_dir = args.fig_dir.format(cmt, folder_name)
-    args.result_dir = args.result_dir.format(cmt, folder_name)
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_seg{args.withPA}_{time_marker}'
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_residual_att_btversky_seg{args.withPA}_{time_marker}'
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_nofpn_residual_att_btversky_seg{args.withPA}_{time_marker}'
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_PA{args.withPA}_{time_marker}'
+    if args.withFPNMask:
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_FPN_Mask{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN mask
+    elif args.withPA:
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_{time_marker}' # FPN Pixel attention mask
+    else:
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN Pixel attention mask
+      
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_btversky_seg{args.withPA}_{time_marker}'
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_dice_seg{args.withPA}_{time_marker}' ## has no impact
+    # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_ReduceLROnPlateau_{time_marker}'
+    args.weight_dir = args.weight_dir.format(CMT, folder_name)
+    args.log_dir = args.log_dir.format(CMT, folder_name)
+    args.fig_dir = args.fig_dir.format(CMT, folder_name)
+    args.result_dir = args.result_dir.format(CMT, folder_name)
     from data_utils import yolo2voc
-    dir_args = yolo2voc.get_dir_arg(cmt, syn=train_syn)
-    print(dir_args.syn_data_segs_dir)
+    dir_args = yolo2voc.get_dir_arg(CMT, syn=train_syn)
+    # print(dir_args.syn_data_segs_dir)
     print(args)
     # 检查保存权重文件夹是否存在，不存在则创建
-    if not os.path.exists(args.weight_dir):
-        os.makedirs(args.weight_dir)
+    # if not os.path.exists(args.weight_dir):
+    #     os.makedirs(args.weight_dir)
     # 检查保存log文件夹是否存在，不存在则创建
-    if not os.path.exists(args.log_dir):
-        os.makedirs(args.log_dir)
+    # if not os.path.exists(args.log_dir):
+    #     os.makedirs(args.log_dir)
     # 检查保存figure文件夹是否存在，不存在则创建
-    if not os.path.exists(args.fig_dir):
-        os.makedirs(args.fig_dir) 
+    # if not os.path.exists(args.fig_dir):
+    #     os.makedirs(args.fig_dir) 
     # 检查保存result文件夹是否存在，不存在则创建
-    if not os.path.exists(args.result_dir):
-        os.makedirs(args.result_dir) 
+    # if not os.path.exists(args.result_dir):
+    #     os.makedirs(args.result_dir) 
     
     main(args, dir_args, train_syn)
 
 
-
-
-
-
-
-
-    # parser.add_argument("--syn_base_dir", type=str, default='/data/users/yang/data/synthetic_data_wdt',
-    #                     help="base path of synthetic data")
-
-    # parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
-    #                     help="Path to folder containing synthetic images and annos \{syn_base_dir\}/{cmt}")
-
-    # parser.add_argument("--syn_data_imgs_dir", type=str, default='{}/{}_images',
-    #                     help="Path to folder containing synthetic images .jpg \{cmt\}/{cmt}_images")   
-    # parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
-    #                     help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
-
-    # parser.add_argument("--syn_data_segs_dir", type=str, default='{}/{}_annos_dilated',
-    #                     help="Path to folder containing synthetic SegmentationClass .jpg \{cmt\}/{cmt}_annos_dilated")
-    
-    # parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
-    # parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
-    # parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
-        
-    # parser.add_argument("--min_region", type=int, default=10, help="the smallest #pixels (area) to form an object")
-    # parser.add_argument("--link_r", type=int, default=10,  help="the #pixels between two connected components to be grouped")
-    # parser.add_argument("--px_thres", type=int, default=12, help="the smallest #pixels to form an edge")
-    # parser.add_argument("--whr_thres", type=int, default=5, help="ratio threshold of w/h or h/w")                        
-  
-# if train_syn:
-    #     args.syn_data_dir = args.syn_data_dir.format(args.syn_base_dir, cmt)
-    #     args.syn_data_imgs_dir = args.syn_data_imgs_dir.format(args.syn_data_dir, cmt)
-    #     args.syn_data_segs_dir = args.syn_data_segs_dir.format(args.syn_data_dir, cmt)
-
-    #     args.syn_voc_annos_dir = args.syn_voc_annos_dir.format(args.syn_base_dir, cmt, args.link_r, args.min_region, args.px_thres, args.whr_thres)
-    # else:
-    #     args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, cmt)
-    #     args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, cmt)
