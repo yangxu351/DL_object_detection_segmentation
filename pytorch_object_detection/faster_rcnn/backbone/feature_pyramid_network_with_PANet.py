@@ -7,25 +7,32 @@ import torch.nn.functional as F
 
 from torch.jit.annotations import Tuple, List, Dict
 
-from network_files import visualize_feature 
+from network_files import visualize_feature
+from backbone import resnet50_fpn_model
 
-class InceptionAttention(nn.Module):
-    
-    def __init__(self,):
-        super(InceptionAttention,self).__init__()
-        # self.inception_module = InceptionModule()
-        self.in_channels = 256
-        self.out_channels = 1
-        self.inception_attention_conv = nn.Conv2d(in_channels=self.in_channels, out_channels=self.out_channels, kernel_size=(1, 1), stride=1)
-        self.bn = nn.BatchNorm2d(self.out_channels)
-        for m in self.children():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_uniform_(m.weight, a=1)
-                nn.init.constant_(m.bias, 0)
-    def forward(self,x, idx):
-        # x = self.inception_module(x)
-        x = self.inception_attention_conv(x)
-        x = self.bn(x)
+
+class Attention(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Attention,self).__init__()
+        # self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)
+        # self.bn = nn.BatchNorm2d(out_channels)
+        # self.relu = nn.ReLU(inplace=True)
+        inter_channels = in_channels // 4
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, inter_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(inter_channels),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Conv2d(inter_channels, out_channels, 1)
+        )
+        # self.attention_conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(1, 1), stride=1)
+        # self.bn_one = nn.BatchNorm2d(out_channels)
+    def forward(self,x, idx=0):
+        # x = self.conv(x)
+        # x = self.bn(x)
+        # x = self.relu(x)
+        x = self.block(x)
+        
         # visualize_feature.visualize_feature_map(x, idx)
         return x 
 
@@ -56,8 +63,7 @@ class FeaturePyramidNetworkwithPA(nn.Module):
         self.layer_blocks = nn.ModuleList()
         # pixel attention branch
         self.pixel_blocks = nn.ModuleList()
-
-        for in_channels in in_channels_list:
+        for in_channels in in_channels_list: # [256, 512, 1024, 2048]
             if in_channels == 0:
                 continue
             inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
@@ -66,7 +72,9 @@ class FeaturePyramidNetworkwithPA(nn.Module):
             self.inner_blocks.append(inner_block_module)
             self.layer_blocks.append(layer_block_module)
 
-            self.pixel_blocks.append(InceptionAttention())
+            pixel_block_module = Attention(out_channels, out_channels=1)
+            self.pixel_blocks.append(pixel_block_module)
+        
         # initialize parameters now to avoid modifying the initialization of top_blocks
         for m in self.children():
             if isinstance(m, nn.Conv2d):
@@ -124,13 +132,9 @@ class FeaturePyramidNetworkwithPA(nn.Module):
             if i == idx:
                 pa_mask = module(x, idx)
             i += 1
-        # pa_mask_softmax = torch.softmax(pa_mask,dim=1)
-        # pa = pa_mask_softmax[:, 1:, :, :]
-        # out = pa*x
-        # return out, pa_mask
         
         pa_mask_sigm = torch.sigmoid(pa_mask)
-        out = pa_mask_sigm * x
+        out = out*pa_mask_sigm
         return out, pa_mask
         
         
@@ -146,8 +150,10 @@ class FeaturePyramidNetworkwithPA(nn.Module):
                 They are ordered from highest resolution first.
         """
         # unpack OrderedDict into two lists for easier handling
-        names = list(x.keys())
-        x = list(x.values())
+        names = list(x.keys()) # ['0', '1', '2', '3']
+        x = list(x.values())  # [256, 512, 1024, 2048]
+        # print('name', names)
+        # print('x[0]', x[0].shape)
 
         # 将resnet layer4的channel调整到指定的out_channels
         # last_inner = self.inner_blocks[-1](x[-1])
@@ -156,25 +162,26 @@ class FeaturePyramidNetworkwithPA(nn.Module):
         results = []
         # pixel_result 中保存着每个预测pixel特征层的
         pixel_results = []
-        pixel_layer, pixel_mask = self.get_result_from_pixel_blocks(last_inner, -1)
-        pixel_results.append(pixel_mask)
-
+        # pixel_layer, pixel_mask = self.get_result_from_pixel_blocks(last_inner, -1)
+        # pixel_results.append(pixel_mask)
+        
         # 将layer4调整channel后的特征矩阵，通过3x3卷积后得到对应的预测特征矩阵
-        # results.append(self.layer_blocks[-1](last_inner))
-        results.append(self.get_result_from_layer_blocks(pixel_layer, -1))
+        # results.append(self.get_result_from_layer_blocks(pixel_layer, -1))
+        results.append(self.get_result_from_layer_blocks(last_inner, -1))
         
         for idx in range(len(x) - 2, -1, -1):
             inner_lateral = self.get_result_from_inner_blocks(x[idx], idx)
             feat_shape = inner_lateral.shape[-2:]
             inner_top_down = F.interpolate(last_inner, size=feat_shape, mode="nearest")
             last_inner = inner_lateral + inner_top_down
+            if idx == 1 or idx == 0 : # layer2 or layer1
+                pixel_layer, pixel_mask = self.get_result_from_pixel_blocks(last_inner, idx)
+                pixel_results.insert(0, pixel_mask)
+                results.insert(0, self.get_result_from_layer_blocks(pixel_layer, idx))
+            else:
+                results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
             
-            pixel_layer, pixel_mask = self.get_result_from_pixel_blocks(last_inner, idx)
-            pixel_results.insert(0, pixel_mask)
-
-            results.insert(0, self.get_result_from_layer_blocks(pixel_layer, idx))
-            
-        mask_out = OrderedDict([(k, pv) for k, pv in zip(names[:4], pixel_results)])
+        mask_out = OrderedDict([(k, pv) for k, pv in zip(names, pixel_results)])
 
         # 在layer4对应的预测特征层基础上生成预测特征矩阵5
         if self.extra_blocks is not None:
@@ -182,7 +189,6 @@ class FeaturePyramidNetworkwithPA(nn.Module):
 
         # make it back an OrderedDict
         out = OrderedDict([(k, v) for k, v in zip(names, results)])
-        
         return out, mask_out
 
 
