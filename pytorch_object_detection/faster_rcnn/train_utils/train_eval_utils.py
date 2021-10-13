@@ -1,4 +1,5 @@
 import math
+from shutil import which
 import sys
 import time
 
@@ -9,7 +10,7 @@ from .coco_eval import CocoEvaluator
 import train_utils.distributed_utils as utils
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch,
+def train_one_epoch(model, optimizer, data_loader, device, epoch, withPA=False, withFPNMask=False, 
                     print_freq=50, warmup=False):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -31,7 +32,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         if masks is not None:
             masks = list(mask.to(device) for mask in masks)
-
+        
+        torch.autograd.set_detect_anomaly(True) # 正向传播时：开启自动求导的异常侦测,会给出具体是哪句代码求导出现的问题。
         # 混合精度训练上下文管理器，如果在CPU环境中不起任何作用
         with torch.cuda.amp.autocast(enabled=enable_amp):
             loss_dict = model(images, targets, masks)
@@ -48,9 +50,11 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
             loss_value = losses_reduced.item()
             # 记录训练损失
             mloss = (mloss * i + loss_value) / (i + 1)  # update mean losses
-
-            mask_losses_reduced_value = loss_dict_reduced['loss_mask']
-            mask_mloss = (mask_mloss * i + mask_losses_reduced_value) / (i + 1)  # update mean losses
+            if withPA:
+                mask_losses_reduced_value = loss_dict_reduced['loss_mask']
+                mask_mloss = (mask_mloss * i + mask_losses_reduced_value) / (i + 1)  # update mean losses
+            else:
+                mask_mloss=None
 
 
             if not math.isfinite(loss_value):  # 当计算的损失为无穷大时停止训练

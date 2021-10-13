@@ -8,6 +8,7 @@ from torchvision.ops.misc import FrozenBatchNorm2d
 
 from .feature_pyramid_network import FeaturePyramidNetwork, LastLevelMaxPool
 from .feature_pyramid_network_with_PANet import FeaturePyramidNetworkwithPA
+from .feature_pyramid_network_with_Mask import FeaturePyramidNetworkwithFPNMask
 
 
 class Bottleneck(nn.Module):
@@ -29,11 +30,11 @@ class Bottleneck(nn.Module):
         self.conv3 = nn.Conv2d(in_channels=out_channel, out_channels=out_channel * self.expansion,
                                kernel_size=1, stride=1, bias=False)  # unsqueeze channels
         self.bn3 = norm_layer(out_channel * self.expansion)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=True) # You can't do an inplace-addition after an inplace relu:
         self.downsample = downsample
 
     def forward(self, x):
-        identity = x
+        identity = x.clone()
         if self.downsample is not None:
             identity = self.downsample(x)
 
@@ -49,8 +50,8 @@ class Bottleneck(nn.Module):
         out = self.bn3(out)
 
         out += identity
-        out = self.relu(out)
-
+        out = self.relu(out) 
+        # out.sum().backward()
         return out
 
 
@@ -64,7 +65,6 @@ class ResNet(nn.Module):
 
         self.include_top = include_top
         self.in_channel = 64
-
         self.conv1 = nn.Conv2d(3, self.in_channel, kernel_size=7, stride=2,
                                padding=3, bias=False)
         self.bn1 = norm_layer(self.in_channel)
@@ -161,9 +161,9 @@ class IntermediateLayerGetter(nn.ModuleDict):
     def __init__(self, model, return_layers):
         if not set(return_layers).issubset([name for name, _ in model.named_children()]):
             raise ValueError("return_layers are not present in model")
-
         orig_return_layers = return_layers
         return_layers = {str(k): str(v) for k, v in return_layers.items()}
+        print('return_layers', return_layers) # {'layer1': '0', 'layer2': '1', 'layer3': '2', 'layer4': '3'}
         layers = OrderedDict()
 
         # 遍历模型子模块按顺序存入有序字典
@@ -210,19 +210,39 @@ class BackboneWithFPN(nn.Module):
         out_channels (int): the number of channels in the FPN
     """
 
-    def __init__(self, backbone, return_layers, in_channels_list, out_channels, extra_blocks=None):
+    def __init__(self, backbone, return_layers, in_channels_list, out_channels, extra_blocks=None, withPA=False, withFPNMask=False, soft_val=1):
         super(BackboneWithFPN, self).__init__()
 
         if extra_blocks is None:
             extra_blocks = LastLevelMaxPool()
 
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
-        
-        self.fpnWithPA = FeaturePyramidNetworkwithPA(
-            in_channels_list=in_channels_list,
-            out_channels=out_channels,
-            extra_blocks=extra_blocks,
-        )
+        if withPA:
+            self.fpnWithPA = FeaturePyramidNetworkwithPA(
+                in_channels_list=in_channels_list,
+                out_channels=out_channels,
+                extra_blocks=extra_blocks,
+            )
+        if withFPNMask:
+            self.fpnwithFPNMask = FeaturePyramidNetworkwithFPNMask(
+                in_channels_list=in_channels_list,
+                out_channels=out_channels,
+                extra_blocks=extra_blocks,
+                soft_val = soft_val,
+            )
+
+        # self.fpnWithPA = FeaturePyramidNetworkwithPA(
+        #         in_channels_list=in_channels_list,
+        #         out_channels=out_channels,
+        #         extra_blocks=extra_blocks,
+        #     )
+        # self.fpnwithFPNMask = FeaturePyramidNetworkwithFPNMask(
+        #         in_channels_list=in_channels_list,
+        #         out_channels=out_channels,
+        #         extra_blocks=extra_blocks,
+        #         soft_val = soft_val,
+        # )
+
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
             out_channels=out_channels,
@@ -230,12 +250,20 @@ class BackboneWithFPN(nn.Module):
         )
 
         self.out_channels = out_channels
+        self.withPA = withPA
+        self.withFPNMask= withFPNMask
 
     def forward(self, x, masks):
-        x = self.body(x)
+        x = self.body(x) # top-down features of each level (returned layers)
         mask_x=None
         if masks is not None:
-            x, mask_x = self.fpnWithPA(x)
+            if self.withPA:
+                x, mask_x = self.fpnWithPA(x)
+            elif self.withFPNMask:
+                x = self.fpnwithFPNMask(x, masks)
+            else:
+                print('please select one type of mask processes [withPA, withFPNMask] in FPN backbone')
+                exit(0)
         else:
             x = self.fpn(x)
         return x, mask_x
@@ -245,7 +273,7 @@ def resnet50_fpn_backbone(pretrain_path="",
                           norm_layer=FrozenBatchNorm2d,  # FrozenBatchNorm2d的功能与BatchNorm2d类似，但参数无法更新
                           trainable_layers=3,
                           returned_layers=None,
-                          extra_blocks=None):
+                          extra_blocks=None, withPA=False, withFPNMask=False, soft_val=1.):
     """
     搭建resnet50_fpn——backbone
     Args:
@@ -304,4 +332,4 @@ def resnet50_fpn_backbone(pretrain_path="",
     in_channels_list = [in_channels_stage2 * 2 ** (i - 1) for i in returned_layers]
     # 通过fpn后得到的每个特征层的channel
     out_channels = 256
-    return BackboneWithFPN(resnet_backbone, return_layers, in_channels_list, out_channels, extra_blocks=extra_blocks)
+    return BackboneWithFPN(resnet_backbone, return_layers, in_channels_list, out_channels, extra_blocks=extra_blocks, withPA=withPA, withFPNMask=withFPNMask, soft_val=soft_val)
