@@ -231,13 +231,58 @@ class RPNHead(nn.Module):
             if isinstance(layer, nn.Conv2d):
                 torch.nn.init.normal_(layer.weight, std=0.01)
                 torch.nn.init.constant_(layer.bias, 0)
-
+        
     def forward(self, x):
         # type: (List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]
         logits = []
         bbox_reg = []
         for i, feature in enumerate(x):
             t = F.relu(self.conv(feature))
+            logits.append(self.cls_logits(t))
+            bbox_reg.append(self.bbox_pred(t))
+        return logits, bbox_reg
+
+
+class RPNMaskHead(nn.Module):
+    """
+    add a mask RPN head with classification and regression
+    通过滑动窗口计算预测目标概率与bbox regression参数
+
+    Arguments:
+        in_channels: number of channels of the input feature
+        num_anchors: number of anchors to be predicted
+    """
+
+    def __init__(self, in_channels, num_anchors, soft_val=1.0):
+        super(RPNMaskHead, self).__init__()
+        # 3x3 滑动窗口
+        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
+        # 计算预测的目标分数（这里的目标只是指前景或者背景）
+        self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
+        # 计算预测的目标bbox regression参数
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=1, stride=1)
+
+        for layer in self.children():
+            if isinstance(layer, nn.Conv2d):
+                torch.nn.init.normal_(layer.weight, std=0.01)
+                torch.nn.init.constant_(layer.bias, 0)
+        
+        self.soft_val=soft_val 
+
+    def forward(self, x, masks=None):
+        # type: (List[Tensor], List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]
+        logits = []
+        bbox_reg = []
+        for i, feature in enumerate(x):
+            # t = F.relu(self.conv(feature))
+            if masks is not None and (i==0 or i==1):
+                feat_shape = feature.shape[-2:]
+                msk = F.interpolate(masks, size=feat_shape, mode="nearest")
+                msk[msk==0] = self.soft_val 
+                rl_feat = F.relu(self.conv(feature))
+                t = rl_feat*msk
+            else:
+                t = F.relu(self.conv(feature))
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg
@@ -580,7 +625,8 @@ class RegionProposalNetwork(torch.nn.Module):
     def forward(self,
                 images,        # type: ImageList
                 features,      # type: Dict[str, Tensor]
-                targets=None   # type: Optional[List[Dict[str, Tensor]]]
+                targets=None,   # type: Optional[List[Dict[str, Tensor]]]
+                masks=None,   # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Tensor], Dict[str, Tensor]]
         """
@@ -605,7 +651,10 @@ class RegionProposalNetwork(torch.nn.Module):
 
         # 计算每个预测特征层上的预测目标概率和bboxes regression参数
         # objectness和pred_bbox_deltas都是list
-        objectness, pred_bbox_deltas = self.head(features)
+        if masks is not None: 
+            objectness, pred_bbox_deltas = self.head(features, masks) # RPNMaskHead
+        else:
+            objectness, pred_bbox_deltas = self.head(features)
 
         # 生成一个batch图像的所有anchors信息,list(tensor)元素个数等于batch_size
         anchors = self.anchor_generator(images, features)
