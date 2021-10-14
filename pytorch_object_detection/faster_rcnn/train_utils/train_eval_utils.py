@@ -10,7 +10,7 @@ from .coco_eval import CocoEvaluator
 import train_utils.distributed_utils as utils
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, withPA=False,
+def train_one_epoch(model, optimizer, data_loader, device, epoch, withPA=False, 
                     print_freq=50, warmup=False):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -30,9 +30,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, withPA=False,
     for i, [images, targets, masks] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         images = list(image.to(device) for image in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-        if masks is not None:
+        if not all(i is None for i in masks):# and (withRPNMask or withFPNMask or withPA):
             masks = list(mask.to(device) for mask in masks)
-        
+        else:
+            masks=None
         torch.autograd.set_detect_anomaly(True) # 正向传播时：开启自动求导的异常侦测,会给出具体是哪句代码求导出现的问题。
         # 混合精度训练上下文管理器，如果在CPU环境中不起任何作用
         with torch.cuda.amp.autocast(enabled=enable_amp):
