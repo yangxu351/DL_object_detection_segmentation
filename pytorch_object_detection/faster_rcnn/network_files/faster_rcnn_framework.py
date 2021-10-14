@@ -10,8 +10,9 @@ from backbone.resnet50_fpn_model import BackboneWithFPN
 
 # from .roi_head import RoIHeads
 from network_files.roi_head import RoIHeads
+from parameters import WITH_RPN_MASK
 from .transform import GeneralizedRCNNTransform
-from .rpn_function import AnchorsGenerator, RPNHead, RegionProposalNetwork
+from .rpn_function import AnchorsGenerator, RPNHead, RegionProposalNetwork, RPNMaskHead
 from .mask_head import MaskHead
 
 class FasterRCNNBase(nn.Module):
@@ -27,13 +28,14 @@ class FasterRCNNBase(nn.Module):
             the model
     """
 
-    def __init__(self, backbone, rpn, roi_heads, transform, mask_head): 
+    def __init__(self, backbone, rpn, roi_heads, transform, mask_head=None, withRPNMask=False): 
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
         self.backbone = backbone
         self.rpn = rpn
         self.roi_heads = roi_heads
         self.mask_head = mask_head
+        self.withRPNMask = withRPNMask,
         # used only on torchscript mode
         self._has_warned = False
 
@@ -100,7 +102,10 @@ class FasterRCNNBase(nn.Module):
         # 将特征层以及标注target信息传入rpn中
         # proposals: List[Tensor], Tensor_shape: [num_proposals, 4],
         # 每个proposals是绝对坐标，且为(x1, y1, x2, y2)格式
-        proposals, proposal_losses = self.rpn(images, features, targets)
+        if self.withRPNMask and masks is not None:
+            proposals, proposal_losses = self.rpn(images, features, targets, masks)
+        else:    
+            proposals, proposal_losses = self.rpn(images, features, targets)
         
         # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
         detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
@@ -275,7 +280,7 @@ class FasterRCNN(FasterRCNNBase):
                  box_batch_size_per_image=512, box_positive_fraction=0.25,  # fast rcnn计算误差时采样的样本数，以及正样本占所有样本的比例
                  bbox_reg_weights=None,
                  # mask parameters
-                 mask_head=None):
+                 mask_head=None, withRPNMask=False, soft_val=1.):
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
                 "backbone should contain an attribute out_channels"
@@ -308,9 +313,14 @@ class FasterRCNN(FasterRCNNBase):
 
         # 生成RPN通过滑动窗口预测网络部分
         if rpn_head is None:
-            rpn_head = RPNHead(
-                out_channels, rpn_anchor_generator.num_anchors_per_location()[0]
-            )
+            if withRPNMask:
+                rpn_head = RPNMaskHead(
+                    out_channels, rpn_anchor_generator.num_anchors_per_location()[0], soft_val=soft_val
+                )
+            else:
+                rpn_head = RPNHead(
+                    out_channels, rpn_anchor_generator.num_anchors_per_location()[0]
+                )
 
         # 默认rpn_pre_nms_top_n_train = 2000, rpn_pre_nms_top_n_test = 1000,
         # 默认rpn_post_nms_top_n_train = 2000, rpn_post_nms_top_n_test = 1000,
@@ -372,4 +382,4 @@ class FasterRCNN(FasterRCNNBase):
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
         
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head) 
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head, withRPNMask) 

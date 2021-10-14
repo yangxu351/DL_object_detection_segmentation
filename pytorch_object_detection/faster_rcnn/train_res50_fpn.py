@@ -23,7 +23,7 @@ def create_model(num_classes, parser_data):
     backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d, returned_layers=[1,2,3,4],
                                      trainable_layers=3, withPA=parser_data.withPA, withFPNMask=parser_data.withFPNMask, soft_val=parser_data.soft_val)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91)
+    model = FasterRCNN(backbone=backbone, num_classes=91, withRPNMask=parser_data.withRPNMask, soft_val=parser_data.soft_val)
 
     # 载入预训练模型权重
     # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
@@ -69,7 +69,7 @@ def main(parser_data, dir_args, train_syn=True):
     if train_syn:
         data_imgs_dir = dir_args.syn_data_imgs_dir
         voc_annos_dir = dir_args.syn_voc_annos_dir
-        if parser_data.withPA or parser_data.withMask:
+        if parser_data.withPA or parser_data.withFPNMask or parser_data.withRPNMask:
             data_segs_dir = dir_args.syn_data_segs_dir
         else: 
             data_segs_dir = ''
@@ -275,7 +275,9 @@ if __name__ == "__main__":
     # 训练的batch size
     parser.add_argument('--batch_size', default=BATCH_SIZE, type=int, metavar='N', help='batch size when training.')
     # 是否 fpn_withMask
-    parser.add_arrgument('--withFPNMask', default=WITH_FPN_MASK, type=bool, help='True when training withMask at FPN. directly multiply the mask with layer output')
+    parser.add_argument('--withFPNMask', default=WITH_FPN_MASK, type=bool, help='True when training withMask at FPN. directly multiply the mask with layer output')
+    # 是否 rpn_withMask
+    parser.add_argument('--withRPNMask', default=WITH_RPN_MASK, type=bool, help='True when training withMask at RPN. directly multiply the mask with layer output')
     # fpn_withMask  or rpn_withMask
     parser.add_argument('--soft_val', default=SOFT_VAL, type=float, help='0.5 when training withMask, mask[mask==0] == soft_val')
     # 是否 fpn_withPA
@@ -297,6 +299,8 @@ if __name__ == "__main__":
         folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_FPN_Mask{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN mask
     elif args.withPA:
         folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_{time_marker}' # FPN Pixel attention mask
+    elif args.withRPNMask: 
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}' # RPN mask
     else:
         folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN Pixel attention mask
       
