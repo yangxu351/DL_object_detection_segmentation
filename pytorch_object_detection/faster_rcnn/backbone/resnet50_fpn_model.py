@@ -8,7 +8,7 @@ from torchvision.ops.misc import FrozenBatchNorm2d
 
 from .feature_pyramid_network import FeaturePyramidNetwork, LastLevelMaxPool
 from .feature_pyramid_network_with_PANet import FeaturePyramidNetworkwithPA
-from .feature_pyramid_network_with_Mask import FeaturePyramidNetworkwithFPNMask
+from .feature_pyramid_network_with_FPNMask import FeaturePyramidNetworkwithFPNMask
 
 
 class Bottleneck(nn.Module):
@@ -261,9 +261,8 @@ class BackboneWithFPN(nn.Module):
                 x, mask_x = self.fpnWithPA(x)
             elif self.withFPNMask:
                 x = self.fpnwithFPNMask(x, masks)
-            else:
-                print('please select one type of mask processes [withPA, withFPNMask] in FPN backbone')
-                exit(0)
+            else: # withRPNMask
+                x = self.fpn(x)
         else:
             x = self.fpn(x)
         return x, mask_x
