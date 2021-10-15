@@ -4,6 +4,7 @@ import torch
 from torch import nn, Tensor
 from torch.nn import functional as F
 import torchvision
+from copy import deepcopy
 
 from . import det_utils
 from . import boxes as box_ops
@@ -278,7 +279,13 @@ class RPNMaskHead(nn.Module):
             if masks is not None and (i==0 or i==1):
                 feat_shape = feature.shape[-2:]
                 msk = F.interpolate(masks, size=feat_shape, mode="nearest")
-                msk[msk==0] = self.soft_val 
+                if self.soft_val == -1:
+                    soft_msk = torch.rand_like(msk)
+                    soft_msk[msk==1] = 1
+                    msk=soft_msk
+                else:
+                    msk[msk==0] = self.soft_val
+
                 rl_feat = F.relu(self.conv(feature))
                 t = rl_feat*msk
             else:
