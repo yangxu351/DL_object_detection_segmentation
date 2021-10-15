@@ -16,6 +16,18 @@ from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
 
+import json 
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
+            
 
 def summarize(self, catId=None):
     """
@@ -176,6 +188,17 @@ def main(parser_data, dir_args, val_all=False):
 
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
+    
+    # img-anns dict    
+    val_anns = []
+    for ann in coco_eval.cocoDt['anns'].keys():
+        val_anns.append(ann)
+
+    # save img-anns dict
+    if len(val_anns):
+        result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
+        with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
+            json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
 
     # 将验证结果保存至txt文件中
     if not os.path.exists(parser_data.result_dir):

@@ -1,5 +1,3 @@
-from pickle import FALSE
-
 
 CMT = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
 
@@ -14,8 +12,13 @@ WITH_FPN_MASK = False # True False,
 ### with RPN Mask multiply
 WITH_RPN_MASK = True # True False
  
-# SOFT_VAL = 1 # 0.5 0.1 1 
-SOFT_VAL = -1
+# SOFT_VAL = 1 
+if WITH_RPN_MASK:
+    SOFT_VAL = -1 # 0.5 0.1 1 # -1 represent random value in [0, 1)
+elif WITH_FPN_MASK:
+    SOFT_VAL = -1 # 0.5 0.1 1 # -1 represent random value in [0, 1)
+else:
+    SOFT_VAL = 1 # do not directly multiply masks
 
 DEVICE= 'cuda:2'
 
