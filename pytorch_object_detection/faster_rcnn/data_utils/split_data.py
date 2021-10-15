@@ -55,15 +55,16 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, wo
 
     return args
 
-def main():
-    random.seed(0)  # 设置随机种子，保证随机结果可复现
-    # cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    # syn = True
-    # val_rate = 0.5
-    
-    cmt = 'xilin_wdt'
-    syn = False
+if __name__ == '__main__':
+    seed = 0
+    random.seed(seed)  # 设置随机种子，保证随机结果可复现
+    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    syn = True
     val_rate = 0.3
+     
+    # cmt = 'xilin_wdt'
+    # syn = False
+    # val_rate = 0.3
 
     # cmt = 'DJI_wdt'
     # syn = False
@@ -88,8 +89,8 @@ def main():
     print('len val files', len(val_files))
     try:
         all_f = open(os.path.join(args.workdir_main, "all.txt"), "w")
-        train_f = open(os.path.join(args.workdir_main, "train.txt"), "w")
-        eval_f = open(os.path.join(args.workdir_main, "val.txt"), "w")
+        train_f = open(os.path.join(args.workdir_main, f"train_seed{seed}.txt"), "w")
+        eval_f = open(os.path.join(args.workdir_main, f"val_seed{seed}.txt"), "w")
         train_f.write("\n".join(train_files))
         eval_f.write("\n".join(val_files))
         all_f.write("\n".join(train_files+val_files))
@@ -98,5 +99,3 @@ def main():
         exit(1)
 
 
-if __name__ == '__main__':
-    main()
