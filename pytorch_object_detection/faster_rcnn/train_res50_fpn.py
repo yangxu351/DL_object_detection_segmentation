@@ -83,7 +83,7 @@ def main(parser_data, dir_args, train_syn=True):
 
     # load train data set
     # real_syn_wdt_vockit -> cmt ->  Main -> train.txt
-    train_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, data_segs_dir, transforms=data_transform["train"], txt_name="train.txt")
+    train_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, data_segs_dir, transforms=data_transform["train"], txt_name=f"train_seed{parser_data.data_seed}.txt")
     train_sampler = None
 
     # 是否按图片相似高宽比采样图片组成batch
@@ -116,7 +116,7 @@ def main(parser_data, dir_args, train_syn=True):
 
     # load validation data set
     # VOCdevkit -> VOC2012 -> ImageSets -> Main -> val.txt
-    val_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, transforms=data_transform["val"], txt_name="val.txt")
+    val_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, transforms=data_transform["val"], txt_name=f"val_seed{parser_data.data_seed}.txt")
     val_data_set_loader = torch.utils.data.DataLoader(val_dataset,
                                                       batch_size=1,
                                                       shuffle=False,
@@ -150,6 +150,7 @@ def main(parser_data, dir_args, train_syn=True):
             os.makedirs(parser_data.log_dir)
         tb_writer = SummaryWriter(log_dir=parser_data.log_dir)
     except:
+        print('no tb_writer')
         pass
 
     # 如果指定了上次训练保存的权重文件地址，则接着上次结果接着训练
@@ -247,17 +248,20 @@ def main(parser_data, dir_args, train_syn=True):
 if __name__ == "__main__":
 
     from parameters import *
+    cmt_seed = f'{CMT}_dataseed{DATA_SEED}'
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 训练设备类型
     parser.add_argument('--device', default=DEVICE, help='device')
+    # 数据分割种子
+    parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
     # 学习率
     parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
     # 检测目标类别数(不包含背景)
     parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
     # 训练数据集的根目录(VOCdevkit)scr
-    parser.add_argument('--data-path', default='./real_syn_wdt_vockit/{}', help='dataset')
+    parser.add_argument('--data_path', default='./real_syn_wdt_vockit/{}', help='dataset')
     # 权重文件保存地址
     parser.add_argument('--weight_dir', default='./save_weights/{}/{}', help='path where to save weight')
     # log文件保存地址
@@ -307,10 +311,10 @@ if __name__ == "__main__":
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_btversky_seg{args.withPA}_{time_marker}'
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_dice_seg{args.withPA}_{time_marker}' ## has no impact
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_ReduceLROnPlateau_{time_marker}'
-    args.weight_dir = args.weight_dir.format(CMT, folder_name)
-    args.log_dir = args.log_dir.format(CMT, folder_name)
-    args.fig_dir = args.fig_dir.format(CMT, folder_name)
-    args.result_dir = args.result_dir.format(CMT, folder_name)
+    args.weight_dir = args.weight_dir.format(cmt_seed, folder_name)
+    args.log_dir = args.log_dir.format(cmt_seed, folder_name)
+    args.fig_dir = args.fig_dir.format(cmt_seed, folder_name)
+    args.result_dir = args.result_dir.format(cmt_seed, folder_name)
     from data_utils import yolo2voc
     dir_args = yolo2voc.get_dir_arg(CMT, syn=train_syn)
     # print(dir_args.syn_data_segs_dir)
