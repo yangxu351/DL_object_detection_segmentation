@@ -2,12 +2,13 @@ import os
 import random
 import argparse
 import glob
+from parameters import BASE_DIR
 
 def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, workbase_data_dir='./real_syn_wdt_vockit'):
     parser = argparse.ArgumentParser()
     parser.add_argument("--syn_base_dir", type=str,
                         help="base path of synthetic data",
-                        default='/media/lab/Yang/data/synthetic_data_wdt')
+                        default=f'{BASE_DIR}/data/synthetic_data_wdt')
 
     parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
                         help="Path to folder containing synthetic images and annos \{syn_base_dir\}/{cmt}")
@@ -21,7 +22,7 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, wo
     parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
                         help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
     
-    parser.add_argument("--real_base_dir", type=str,default='/media/lab/Yang/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_base_dir", type=str,default=f'{BASE_DIR}/data/wind_turbine', help="base path of synthetic data")
     parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
     parser.add_argument("--real_yolo_annos_dir", type=str, default='{}/{}_crop_label_xcycwh', help="Path to folder containing real annos of yolo format")
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
@@ -56,8 +57,8 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, wo
     return args
 
 if __name__ == '__main__':
-    seed = 0
-    random.seed(seed)  # 设置随机种子，保证随机结果可复现
+    data_seed = 0
+    random.seed(data_seed)  # 设置随机种子，保证随机结果可复现
     cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = True
     val_rate = 0.3
@@ -89,8 +90,8 @@ if __name__ == '__main__':
     print('len val files', len(val_files))
     try:
         all_f = open(os.path.join(args.workdir_main, "all.txt"), "w")
-        train_f = open(os.path.join(args.workdir_main, f"train_seed{seed}.txt"), "w")
-        eval_f = open(os.path.join(args.workdir_main, f"val_seed{seed}.txt"), "w")
+        train_f = open(os.path.join(args.workdir_main, f"train_seed{data_seed}.txt"), "w")
+        eval_f = open(os.path.join(args.workdir_main, f"val_seed{data_seed}.txt"), "w")
         train_f.write("\n".join(train_files))
         eval_f.write("\n".join(val_files))
         all_f.write("\n".join(train_files+val_files))

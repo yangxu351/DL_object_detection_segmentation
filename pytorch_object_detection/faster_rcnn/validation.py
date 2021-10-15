@@ -15,8 +15,9 @@ from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
-
+from parameters import BASE_DIR
 import json 
+
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
@@ -232,7 +233,7 @@ if __name__ == "__main__":
     syn = False
     from data_utils import yolo2voc
     dir_args = yolo2voc.get_dir_arg(real_cmt, syn)
-
+    
     parser = argparse.ArgumentParser(
         description=__doc__)
 
@@ -244,7 +245,7 @@ if __name__ == "__main__":
 
     # 数据集的根目录(VOCdevkit)
     parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
-    parser.add_argument("--real_base_dir", type=str,default='/media/lab/Yang/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_base_dir", type=str,default=f'{BASE_DIR}/data/wind_turbine', help="base path of synthetic data")
     parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
         

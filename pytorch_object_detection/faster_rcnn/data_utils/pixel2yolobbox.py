@@ -89,11 +89,12 @@ def draw_bbx_on_rgb_images(cmt, px_thresh=20, whr_thres=4, suffix='_xcycwh'):
 
 
 def get_args(cmt=''):
+    from parameters import BASE_DIR
     parser = argparse.ArgumentParser()
     
     parser.add_argument("--syn_base_dir", type=str,
                         help="base path of synthetic data",
-                        default='/media/lab/Yang/data/synthetic_data_wdt')
+                        default=f'{BASE_DIR}/data/synthetic_data_wdt')
     parser.add_argument("--syn_data_dir", type=str,
                         help="Path to folder containing synthetic images and annos ",
                         default='{}/{}')

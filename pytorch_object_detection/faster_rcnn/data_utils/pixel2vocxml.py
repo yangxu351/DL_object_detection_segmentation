@@ -141,11 +141,12 @@ def draw_bbx_on_rgb_images(cmt):
 
 
 def get_args(cmt='', px_thres=12, whr_thres=5):
+    from parameters import BASE_DIR
     parser = argparse.ArgumentParser()
     
     parser.add_argument("--syn_base_dir", type=str,
                         help="base path of synthetic data",
-                        default='/media/lab/Yang/data/synthetic_data_wdt')
+                        default=f'{BASE_DIR}/data/synthetic_data_wdt')
     parser.add_argument("--syn_data_dir", type=str,
                         help="Path to folder containing synthetic images and annos ",
                         default='{}/{}')
@@ -165,7 +166,7 @@ def get_args(cmt='', px_thres=12, whr_thres=5):
     parser.add_argument("--workdir_data_txt", type=str, default='real_syn_wdt_vockit/{}',
                         help="syn related txt files")
     
-    parser.add_argument("--real_base_dir", type=str, default='/media/lab/Yang/data/wind_turbine',
+    parser.add_argument("--real_base_dir", type=str, default=f'{BASE_DIR}/data/wind_turbine',
                         help="real base dir")
     parser.add_argument("--real_img_dir", type=str, default='{}/wdt_crop',
                         help="real img files files")
