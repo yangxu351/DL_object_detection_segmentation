@@ -15,7 +15,19 @@ from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
+from parameters import BASE_DIR, DATA_SEED
+import json 
 
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
 
 def summarize(self, catId=None):
     """
@@ -117,7 +129,7 @@ def main(parser_data, dir_args, val_all=False):
     print('Using %g dataloader workers' % nw)
 
     # load validation data set
-    txt_name = "all.txt" if val_all else "val.txt"
+    txt_name = "all.txt" if val_all else f"val_seed{parser_data.data_seed}.txt"
     val_dataset = VOCDataSet(VOC_root, dir_args.real_imgs_dir, dir_args.real_voc_annos_dir, transforms=data_transform["val"], txt_name=txt_name)
     val_dataset_loader = torch.utils.data.DataLoader(val_dataset,
                                                      batch_size=1,
@@ -165,6 +177,7 @@ def main(parser_data, dir_args, val_all=False):
     coco_evaluator.summarize()
 
     coco_eval = coco_evaluator.coco_eval["bbox"]
+
     # calculate COCO info for all classes
     coco_stats, print_coco = summarize(coco_eval)
 
@@ -176,6 +189,17 @@ def main(parser_data, dir_args, val_all=False):
 
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
+    
+    # img-anns dict    
+    val_anns = []
+    for ann in coco_eval.cocoDt['anns'].keys():
+        val_anns.append(ann)
+
+    # save img-anns dict
+    if len(val_anns):
+        result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
+        with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
+            json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
 
     # 将验证结果保存至txt文件中
     if not os.path.exists(parser_data.result_dir):
@@ -214,22 +238,23 @@ if __name__ == "__main__":
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda:1', help='device')
-
+    parser.add_argument('--device', default='cuda:0', help='device')
+    # 数据分割种子
+    parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
     # 检测目标类别数
     parser.add_argument('--num-classes', type=int, default=1, help='number of classes')
 
     # 数据集的根目录(VOCdevkit)
     parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
-    parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_base_dir", type=str,default=f'{BASE_DIR}/data/wind_turbine', help="base path of synthetic data")
     parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
         
     # pr results 文件保存地址
-    parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}/{folder_name}', help='path where to save results')
+    parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}', help='path where to save results')
     
     # 训练好的权重文件
-    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
+    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
 
     # batch size
     parser.add_argument('--batch_size', default=1, type=int, metavar='N', help='batch size when validation.')
