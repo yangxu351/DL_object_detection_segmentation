@@ -15,8 +15,9 @@ from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
-
+from parameters import BASE_DIR
 import json 
+
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
@@ -27,7 +28,6 @@ class MyEncoder(json.JSONEncoder):
             return obj.tolist()
         else:
             return super(MyEncoder, self).default(obj)
-            
 
 def summarize(self, catId=None):
     """
@@ -177,6 +177,7 @@ def main(parser_data, dir_args, val_all=False):
     coco_evaluator.summarize()
 
     coco_eval = coco_evaluator.coco_eval["bbox"]
+
     # calculate COCO info for all classes
     coco_stats, print_coco = summarize(coco_eval)
 
@@ -189,6 +190,17 @@ def main(parser_data, dir_args, val_all=False):
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
     
+    # img-anns dict    
+    val_anns = []
+    for ann in coco_eval.cocoDt['anns'].keys():
+        val_anns.append(ann)
+
+    # save img-anns dict
+    if len(val_anns):
+        result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
+        with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
+            json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
+
     # img-anns dict    
     val_anns = []
     for ann in coco_eval.cocoDt['anns'].keys():
@@ -232,7 +244,7 @@ if __name__ == "__main__":
     syn = False
     from data_utils import yolo2voc
     dir_args = yolo2voc.get_dir_arg(real_cmt, syn)
-
+    
     parser = argparse.ArgumentParser(
         description=__doc__)
 
@@ -244,7 +256,7 @@ if __name__ == "__main__":
 
     # 数据集的根目录(VOCdevkit)
     parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
-    parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_base_dir", type=str,default=f'{BASE_DIR}/data/wind_turbine', help="base path of synthetic data")
     parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
         

@@ -5,11 +5,11 @@ import pandas as pd
 import shutil
 
 from PIL import Image
-
+from parameters import BASE_DIR
 def get_dir_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, workbase_data_dir='./real_syn_wdt_vockit'):
     parser = argparse.ArgumentParser()
     if syn:
-        parser.add_argument("--syn_base_dir", type=str, default='/data/users/yang/data/synthetic_data_wdt',
+        parser.add_argument("--syn_base_dir", type=str, default=f'{BASE_DIR}/data/synthetic_data_wdt',
                             help="base path of synthetic data")
                             
         parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
@@ -30,7 +30,7 @@ def get_dir_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True
         parser.add_argument("--syn_box_dir", type=str, default='{}/{}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox',
                             help="syn box on image files \{syn_base_dir\}/{cmt}_gt_bbox/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")
     else:
-        parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+        parser.add_argument("--real_base_dir", type=str,default=f'{BASE_DIR}/data/wind_turbine', help="base path of synthetic data")
         parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
         parser.add_argument("--real_labelme_dir", type=str, default='{}/{}_crop_label', help="Path to folder containing real images label from labelme")
         parser.add_argument("--real_yolo_annos_dir", type=str, default='{}/{}_crop_label_xcycwh', help="Path to folder containing real annos of yolo format")
