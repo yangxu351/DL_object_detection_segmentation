@@ -2,14 +2,14 @@ import os
 import datetime
 
 import torch
-
+import time
 import transforms
 from backbone import resnet50_fpn_backbone, LastLevelP6P7
 from network_files import RetinaNet
 from my_dataset import VOCDataSet
 from train_utils import GroupedBatchSampler, create_aspect_ratio_groups
 from train_utils import train_eval_utils as utils
-
+import numpy as np
 
 def create_model(num_classes):
     # 创建retinanet_res50_fpn模型
@@ -38,8 +38,6 @@ def create_model(num_classes):
 def main(parser_data):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
-
-    results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -112,6 +110,16 @@ def main(parser_data):
                                                    step_size=3,
                                                    gamma=0.33)
 
+    tb_writer = None
+    try:
+        # Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/
+        from torch.utils.tensorboard import SummaryWriter
+        if not os.path.exists(parser_data.log_dir):
+            os.makedirs(parser_data.log_dir)
+        tb_writer = SummaryWriter(log_dir=parser_data.log_dir)
+    except:
+        print('no tb_writer')
+        pass
     # 如果指定了上次训练保存的权重文件地址，则接着上次结果接着训练
     if parser_data.resume != "":
         checkpoint = torch.load(parser_data.resume, map_location='cpu')
@@ -124,7 +132,12 @@ def main(parser_data):
     train_loss = []
     learning_rate = []
     val_map = []
-
+    
+    if not os.path.exists(parser_data.result_dir):
+        os.makedirs(parser_data.result_dir) 
+    # results_file = os.path.join(parser_data.result_dir, "results_{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+    results_file = os.path.join(parser_data.result_dir, "results.txt")
+    t0 = time.time()
     for epoch in range(parser_data.start_epoch, parser_data.epochs):
         # train for one epoch, printing every 10 iterations
         mean_loss, lr = utils.train_one_epoch(model, optimizer, train_data_loader,
@@ -134,6 +147,8 @@ def main(parser_data):
 
         # update the learning rate
         lr_scheduler.step()
+        if tb_writer:
+            tb_writer.add_scalar('lr', np.array(lr_scheduler.get_last_lr())[0], epoch) 
 
         # evaluate on the test dataset
         coco_info = utils.evaluate(model, val_data_loader, device=device)
@@ -145,16 +160,34 @@ def main(parser_data):
             txt = "epoch:{} {}".format(epoch, '  '.join(result_info))
             f.write(txt + "\n")
 
+            if tb_writer:
+                tags = ['AP_IoU_0.50_0.95_area_all', 'AP_IoU_0.50_area_all', 'AP_IoU_0.75_area_all',
+                        'AP_IoU_0.50_0.95_area_small', 'AP_IoU_0.50_0.95_area_medium', 'AP_IoU_0.50_0.95_area_large', 
+                        'AR_IoU_0.50_0.95_area_all_maxDets_1', 'AR_IoU_0.50_0.95_area_all_maxDets_10', 
+                        'AR_IoU_0.50_0.95_area_all_maxDets_100', 'AR_IoU_0.50_0.95_area_small_maxDets_100', 'AR_IoU_0.50_0.95_area_medium_maxDets_100',
+                        'AR_IoU_0.50_0.95_area_large_maxDets_100', 'loss', 'lr']
+                # print('result_info', len(result_info))
+                # print('tags', len(tags))
+                # dict_tag_reslut_info = {k: float(v) for k, v in zip(tags, result_info)}
+                # # print('dict_tag_reslut_info', dict_tag_reslut_info)
+                # tb_writer.add_scalars('IOU metric', dict_tag_reslut_info, epoch)
+                for x, tag in zip(result_info, tags):
+                    # print('x', x)
+                    # print('tag', tag)
+                    tb_writer.add_scalar(tag, x, epoch)
+
         val_map.append(coco_info[1])  # pascal map
 
         # save weights
-        save_files = {
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'lr_scheduler': lr_scheduler.state_dict(),
-            'epoch': epoch}
-        torch.save(save_files, "./save_weights/resNetFpn-model-{}.pth".format(epoch))
+        if epoch % 10 == 0 or epoch >= parser_data.epochs - 1:
+            save_files = {
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'lr_scheduler': lr_scheduler.state_dict(),
+                'epoch': epoch}
+            torch.save(save_files, os.path.join(parser_data.weight_dir,"resNetFpn-model-{}.pth".format(epoch)))
 
+    tb_writer.close()
     # plot loss and lr curve
     if len(train_loss) != 0 and len(learning_rate) != 0:
         from plot_curve import plot_loss_and_lr
@@ -164,39 +197,63 @@ def main(parser_data):
     if len(val_map) != 0:
         from plot_curve import plot_map
         plot_map(val_map)
-
+    print('%g epochs completed in %.3f hours.\n' % (parser_data.epochs, (time.time() - t0) / 3600))
+    
 
 if __name__ == "__main__":
     import argparse
-
+    from parameters import *
+    cmt_seed = f'{CMT}_dataseed{DATA_SEED}'
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 训练设备类型
-    parser.add_argument('--device', default='cuda:0', help='device')
-    # 训练数据集的根目录(VOCdevkit)
-    parser.add_argument('--data-path', default='/data', help='dataset')
+    parser.add_argument('--device', default=DEVICE, help='device')
+    # 数据分割种子
+    parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
+    # 学习率
+    parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
+    # 训练数据集的根目录(VOCdevkit)scr
+    parser.add_argument('--data_path', default='./real_syn_wdt_vockit/{}', help='dataset')
     # 检测目标类别数(不包含背景)
-    parser.add_argument('--num-classes', default=20, type=int, help='num_classes')
-    # 文件保存地址
-    parser.add_argument('--output-dir', default='./save_weights', help='path where to save')
+    parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
+    # 权重文件保存地址
+    parser.add_argument('--weight_dir', default='./save_weights/{}/{}', help='path where to save weight')
+    # log文件保存地址
+    parser.add_argument('--log_dir', default='./save_logs/{}/{}', help='path where to save weight')
+    # ap pr figures文件保存地址
+    parser.add_argument('--fig_dir', default='./save_figures/{}/{}', help='path where to save figures')
+    # pr results 文件保存地址
+    parser.add_argument('--result_dir', default='./save_results/{}/{}', help='path where to save results')
+    
+    # # 文件保存地址
+    # parser.add_argument('--output-dir', default='./save_weights', help='path where to save')
     # 若需要接着上次训练，则指定上次训练保存权重文件地址
     parser.add_argument('--resume', default='', type=str, help='resume from checkpoint')
     # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     # 训练的总epoch数
-    parser.add_argument('--epochs', default=15, type=int, metavar='N',
-                        help='number of total epochs to run')
+    parser.add_argument('--epochs', default=EPOCHS, type=int, metavar='N', help='number of total epochs to run')
     # 训练的batch size
-    parser.add_argument('--batch_size', default=4, type=int, metavar='N',
-                        help='batch size when training.')
+    parser.add_argument('--batch_size', default=BATCH_SIZE, type=int, metavar='N', help='batch size when training.')
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
 
     args = parser.parse_args()
-    print(args)
+    args.data_path = args.data_path.format(CMT)
+    ####################-----------------fixme
+    time_marker = time.strftime('%Y%m%d_%H%M', time.localtime())
+    folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_{time_marker}'
 
-    # 检查保存权重文件夹是否存在，不存在则创建
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    args.weight_dir = args.weight_dir.format(cmt_seed, folder_name)
+    args.log_dir = args.log_dir.format(cmt_seed, folder_name)
+    args.fig_dir = args.fig_dir.format(cmt_seed, folder_name)
+    args.result_dir = args.result_dir.format(cmt_seed, folder_name)
+    # from data_utils import yolo2voc
+    # dir_args = yolo2voc.get_dir_arg(CMT, syn=train_syn)
+    print(args)
+    
+    # # 检查保存权重文件夹是否存在，不存在则创建
+    # if not os.path.exists(args.output_dir):
+    #     os.makedirs(args.output_dir)
 
     main(args)
