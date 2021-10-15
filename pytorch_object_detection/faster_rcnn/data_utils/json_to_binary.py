@@ -155,13 +155,13 @@ folder_name = '608_1cls_cc2_val_seg'
 parser = argparse.ArgumentParser(description='Convert LabelMe XML/JSON files to binary images.')
 
 # Required arguments  
-parser.add_argument('--file', type=str, default=f'/data/users/yang/data/xView_YOLO/segmentations/{folder_name}', 
+parser.add_argument('--file', type=str, default=f'/media/lab/Yang/data/xView_YOLO/segmentations/{folder_name}', 
                     help='path to input file/folder (json/xml/folder)') # metavar='file/folder',
 parser.add_argument('--output',  type=str, default='jpg', help='output file type') # , choices=['png', 'jpg']
 parser.add_argument('--labels', type=str, nargs='?', default=['CC1', 'CC2'], help='labels to include in the image')
 
 # Optional flags
-parser.add_argument('--savedir', required=False, default=f'/data/users/yang/data/xView_YOLO/segmentations/{folder_name}_masks', help='directory to save images in (default: masks)')
+parser.add_argument('--savedir', required=False, default=f'/media/lab/Yang/data/xView_YOLO/segmentations/{folder_name}_masks', help='directory to save images in (default: masks)')
 parser.add_argument('--nosave', required=False, default=False, help='dont save image', 
                     action='store_true')
 parser.add_argument('--preview', required=False, help='show image preview', 

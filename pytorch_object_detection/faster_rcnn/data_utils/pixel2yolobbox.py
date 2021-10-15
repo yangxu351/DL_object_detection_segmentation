@@ -93,7 +93,7 @@ def get_args(cmt=''):
     
     parser.add_argument("--syn_base_dir", type=str,
                         help="base path of synthetic data",
-                        default='/data/users/yang/data/synthetic_data_wdt')
+                        default='/media/lab/Yang/data/synthetic_data_wdt')
     parser.add_argument("--syn_data_dir", type=str,
                         help="Path to folder containing synthetic images and annos ",
                         default='{}/{}')

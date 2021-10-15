@@ -7,7 +7,7 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, wo
     parser = argparse.ArgumentParser()
     parser.add_argument("--syn_base_dir", type=str,
                         help="base path of synthetic data",
-                        default='/data/users/yang/data/synthetic_data_wdt')
+                        default='/media/lab/Yang/data/synthetic_data_wdt')
 
     parser.add_argument("--syn_data_dir", type=str, default='{}/{}',
                         help="Path to folder containing synthetic images and annos \{syn_base_dir\}/{cmt}")
@@ -21,7 +21,7 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, wo
     parser.add_argument("--syn_voc_annos_dir", type=str, default='{}/{}_xml_annos/minr{}_linkr{}_px{}whr{}_all_xml_annos',
                         help="syn annos in voc format .xml \{syn_base_dir\}/{cmt}_xml_annos/minr{}_linkr{}_px{}whr{}_all_annos_with_bbox")     
     
-    parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_base_dir", type=str,default='/media/lab/Yang/data/wind_turbine', help="base path of synthetic data")
     parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
     parser.add_argument("--real_yolo_annos_dir", type=str, default='{}/{}_crop_label_xcycwh', help="Path to folder containing real annos of yolo format")
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")

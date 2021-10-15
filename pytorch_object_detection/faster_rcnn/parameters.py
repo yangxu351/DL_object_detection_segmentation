@@ -1,5 +1,3 @@
-from pickle import FALSE
-
 
 CMT = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
 
@@ -17,6 +15,6 @@ WITH_RPN_MASK = True # True False
 # SOFT_VAL = 1 # 0.5 0.1 1 
 SOFT_VAL = -1
 
-DEVICE= 'cuda:2'
+DEVICE= 'cuda:1'
 
     

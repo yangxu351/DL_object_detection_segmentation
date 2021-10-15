@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
     # 数据集的根目录(VOCdevkit)
     parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
-    parser.add_argument("--real_base_dir", type=str,default='/data/users/yang/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_base_dir", type=str,default='/media/lab/Yang/data/wind_turbine', help="base path of synthetic data")
     parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
         
