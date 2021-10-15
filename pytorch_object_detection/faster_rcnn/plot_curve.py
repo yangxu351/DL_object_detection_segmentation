@@ -9,8 +9,8 @@ def plot_loss_and_lr(train_loss, learning_rate, parser_data, mask_mloss):
         x = list(range(len(train_loss)))
         fig, ax1 = plt.subplots(1, 1)
         ax1.plot(x, train_loss, 'r', label='loss')
-        
-        ax1.plot(x, mask_mloss, 'c', label='mask loss')
+        if len(mask_mloss):
+            ax1.plot(x, mask_mloss, 'c', label='mask loss')
         ax1.set_xlabel("step")
         ax1.set_ylabel("loss")
         ax1.set_title("Train Loss and lr")
@@ -27,6 +27,8 @@ def plot_loss_and_lr(train_loss, learning_rate, parser_data, mask_mloss):
         plt.legend(handles1 + handles2, labels1 + labels2, loc='upper right')
 
         fig.subplots_adjust(right=0.8)  # 防止出现保存图片显示不全的情况
+        if not os.path.exists(parser_data.fig_dir):
+            os.makedirs(parser_data.fig_dir)
         fig.savefig(os.path.join(parser_data.fig_dir,'loss_and_lr{}.png'.format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))))
         plt.close()
         print("successful save loss curve! ")
@@ -43,6 +45,9 @@ def plot_map(mAP, parser_data):
         plt.title('Eval mAP')
         plt.xlim(0, len(mAP))
         plt.legend(loc='best')
+        if not os.path.exists(parser_data.fig_dir):
+            os.makedirs(parser_data.fig_dir)
+        
         plt.savefig(os.path.join(parser_data.fig_dir,'mAP.png'))
         plt.close()
         print("successful save mAP curve!")
