@@ -89,7 +89,7 @@ def summarize(self, catId=None):
     return stats, print_info
 
 
-def main(parser_data, dir_args):
+def main(parser_data, dir_args, val_all=False):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
@@ -117,7 +117,8 @@ def main(parser_data, dir_args):
     print('Using %g dataloader workers' % nw)
 
     # load validation data set
-    val_dataset = VOCDataSet(VOC_root, dir_args.real_imgs_dir, dir_args.real_voc_annos_dir, transforms=data_transform["val"], txt_name="val.txt")
+    txt_name = "all.txt" if val_all else "val.txt"
+    val_dataset = VOCDataSet(VOC_root, dir_args.real_imgs_dir, dir_args.real_voc_annos_dir, transforms=data_transform["val"], txt_name=txt_name)
     val_dataset_loader = torch.utils.data.DataLoader(val_dataset,
                                                      batch_size=1,
                                                      shuffle=False,
@@ -177,7 +178,9 @@ def main(parser_data, dir_args):
     print(print_voc)
 
     # 将验证结果保存至txt文件中
-    with open(os.path.join(parser_data.result_dir, "record_mAP.txt"), "w") as f:
+    if not os.path.exists(parser_data.result_dir):
+        os.makedirs(parser_data.result_dir) 
+    with open(os.path.join(parser_data.result_dir, f"{real_cmt}_allset{val_all}_record_mAP.txt"), "w") as f:
         record_lines = ["COCO results:",
                         print_coco,
                         "",
@@ -187,11 +190,21 @@ def main(parser_data, dir_args):
 
 
 if __name__ == "__main__":
+    val_all = True     # validate on both real train and real val set
+    # val_all = False  # only for validation set
+    # real_cmt = 'xilin_wdt'
+    real_cmt = 'DJI_wdt'
     
-    real_cmt = 'xilin_wdt'
-    # real_cmt = 'DJI_wdt'
-    # folder_name = '2021-09-18_04.58'
-    folder_name = 'lr0.05_bs8_15epochs_bce_2021-09-20_04.09'
+    # folder_name = 'lr0.05_bs8_20epochs_MaskFalse_softval1.0_20211012_0905'     #  0.338(val) 0.2982(all) for xilin, 0.261 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211014_0018'         #  0.3452(val) 0.2941(all) for xilin, 0.3463 for DJI. cuda2 5.856 hours.
+    # epc = 19
+    # folder_name = 'lr0.05_bs8_20epochs_MaskTrue_softval0.5_20211012_2050'        # 0.1827 for xilin, 0.2109 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_20211013_0826'      # 0.4236(val) 0.3345(all) for xilin, 0.2894 for DJI
+    folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211014_0137'       #0.4500(val) 0.3791(all) for xilin,  0.2050 for DJI
+    epc = 19
+    # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.1_20211011_2325'
+    # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.5_20211011_2326'        # 0.132 for xilin,  0.2894 for DJI
+    # epc = 49
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = False
     from data_utils import yolo2voc
@@ -201,7 +214,7 @@ if __name__ == "__main__":
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda', help='device')
+    parser.add_argument('--device', default='cuda:1', help='device')
 
     # 检测目标类别数
     parser.add_argument('--num-classes', type=int, default=1, help='number of classes')
@@ -213,10 +226,10 @@ if __name__ == "__main__":
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
         
     # pr results 文件保存地址
-    parser.add_argument('--result_dir', default=f'./save_results/{real_cmt}', help='path where to save results')
+    parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}/{folder_name}', help='path where to save results')
     
     # 训练好的权重文件
-    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}/{folder_name}/resNetFpn-model-14.pth', type=str, help='training weights')
+    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
 
     # batch size
     parser.add_argument('--batch_size', default=1, type=int, metavar='N', help='batch size when validation.')
@@ -225,6 +238,4 @@ if __name__ == "__main__":
     
     args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, real_cmt)
     args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, real_cmt)
-    if not os.path.exists(args.result_dir):
-        os.mkdir(args.result_dir)
-    main(args, dir_args)
+    main(args, dir_args, val_all)
