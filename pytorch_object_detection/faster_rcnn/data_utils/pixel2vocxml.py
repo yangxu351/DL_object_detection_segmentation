@@ -162,7 +162,7 @@ def get_args(cmt='', px_thres=12, whr_thres=5):
                         
     parser.add_argument("--syn_box_dir", type=str, default='{}/{}_gt_bbox_xml',
                         help="syn box files")
-    parser.add_argument("--workdir_data_txt", type=str, default='data_wdt/{}',
+    parser.add_argument("--workdir_data_txt", type=str, default='real_syn_wdt_vockit/{}',
                         help="syn related txt files")
     
     parser.add_argument("--real_base_dir", type=str, default='/data/users/yang/data/wind_turbine',
@@ -175,7 +175,7 @@ def get_args(cmt='', px_thres=12, whr_thres=5):
     #                     help="real img files files")
     # parser.add_argument("--real_annos_dir", type=str, default='{}/DJI_wdt_resize_crop_label_xcycwh',
     #                     help="real label files")                        
-    parser.add_argument("--real_txt_dir", type=str, default='data_wdt/{}',
+    parser.add_argument("--real_txt_dir", type=str, default='real_syn_wdt_vockit/{}',
                         help="real related txt list in the project")
 
     parser.add_argument("--syn_display_type", type=str, default='color',
