@@ -15,6 +15,8 @@ from build_utils.utils import xyxy2xywh, xywh2xyxy
 
 help_url = 'https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data'
 img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.dng']
+#FIXME
+lbl_formats = ['.txt']
 
 
 # get orientation in exif tag
@@ -48,27 +50,34 @@ def exif_size(img):
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self,
-                 path,   # 指向data/my_train_data.txt路径或data/my_val_data.txt路径
+                 path, label_path,   # 指向data/my_train_data.txt路径或data/my_val_data.txt路径
                  # 这里设置的是预处理后输出的图片尺寸
                  # 当为训练集时，设置的是训练过程中(开启多尺度)的最大尺寸
                  # 当为验证集时，设置的是最终使用的网络大小
-                 img_size=416,
-                 batch_size=16,
+                 img_size=608,
+                 batch_size=8,
                  augment=False,  # 训练集设置为True(augment_hsv)，验证集设置为False
                  hyp=None,  # 超参数字典，其中包含图像增强会使用到的超参数
                  rect=False,  # 是否使用rectangular training
                  cache_images=False,  # 是否缓存图片到内存中
-                 single_cls=False, pad=0.0, rank=-1):
+                 single_cls=True, pad=0.0, rank=-1):
 
         try:
             path = str(Path(path))
-            # parent = str(Path(path).parent) + os.sep
-            if os.path.isfile(path):  # file
-                # 读取对应my_train/val_data.txt文件，读取每一行的图片路劲信息
-                with open(path, "r") as f:
-                    f = f.read().splitlines()
-            else:
-                raise Exception("%s does not exist" % path)
+            assert os.path.isfile(path), 'File not found %s. see %s'  % (path, help_url)
+            with open(path, 'r') as f:
+                self.img_files = [x.replace('/', os.sep) for x in f.read().splitlines()  # os-agnostic
+                                if os.path.splitext(x)[-1].lower() in img_formats]
+            img_names = [os.path.basename(f) for f in self.img_files[:4]]
+            #print('path', path)
+            #print('img_names', img_names)
+            
+            # 遍历设置图像对应的label路径
+            with open(label_path, 'r') as f:
+                self.lbl_files = [x.replace('/', os.sep) for x in f.read().splitlines()  # os-agnostic
+                                if os.path.splitext(x)[-1].lower() in lbl_formats]
+            #print('label_path', label_path)
+            self.label_files = self.lbl_files
 
             # 检查每张图片后缀格式是否在支持的列表中，保存支持的图像路径
             # img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.dng']
@@ -98,8 +107,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         # Define labels
         # 遍历设置图像对应的label路径
         # (./my_yolo_dataset/train/images/2009_004012.jpg) -> (./my_yolo_dataset/train/labels/2009_004012.txt)
-        self.label_files = [x.replace("images", "labels").replace(os.path.splitext(x)[-1], ".txt")
-                            for x in self.img_files]
+        # self.label_files = [x.replace("images", "labels").replace(os.path.splitext(x)[-1], ".txt")
+        #                     for x in self.img_files]
 
         # Read image shapes (wh)
         # 查看data文件下是否缓存有对应数据集的.shapes文件，里面存储了每张图像的width, height

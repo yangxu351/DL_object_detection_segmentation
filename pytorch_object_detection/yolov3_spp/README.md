@@ -17,7 +17,7 @@
   ├── data: 存储训练时数据集相关信息缓存
   │    └── pascal_voc_classes.json: pascal voc数据集标签
   │ 
-  ├── runs: 保存训练过程中生成的所有tensorboard相关文件
+  ├── log_dir: 保存训练过程中生成的所有tensorboard相关文件
   ├── build_utils: 搭建训练网络时使用到的工具
   │     ├── datasets.py: 数据读取以及预处理方法
   │     ├── img_utils.py: 部分图像处理方法

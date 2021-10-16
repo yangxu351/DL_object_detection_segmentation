@@ -13,14 +13,10 @@ from train_utils import train_eval_utils as train_util
 from train_utils import get_coco_api_from_dataset
 
 
-def train(hyp):
+def train(opt, dir_args, hyp, train_syn=True):
     device = torch.device(opt.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
-
-    wdir = "weights" + os.sep  # weights dir
-    best = wdir + "best.pt"
-    results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-
+    
     cfg = opt.cfg
     data = opt.data
     epochs = opt.epochs
@@ -49,15 +45,13 @@ def train(hyp):
     # configure run
     # init_seeds()  # 初始化随机种子，保证结果可复现
     data_dict = parse_data_cfg(data)
-    train_path = data_dict["train"]
-    test_path = data_dict["valid"]
+    train_path = data_dict['train']
+    test_path = data_dict['valid']
+    train_label_path = data_dict['train_label']
+    test_label_path = data_dict['valid_label']
     nc = 1 if opt.single_cls else int(data_dict["classes"])  # number of classes
-    hyp["cls"] *= nc / 80  # update coco-tuned hyp['cls'] to current dataset
+    hyp["cls"] *= nc / 1 # update coco-tuned hyp['cls'] to current dataset
     hyp["obj"] *= imgsz_test / 320
-
-    # Remove previous results
-    for f in glob.glob(results_file):
-        os.remove(f)
 
     # Initialize model
     model = Darknet(cfg).to(device)
@@ -90,7 +84,10 @@ def train(hyp):
     pg = [p for p in model.parameters() if p.requires_grad]
     optimizer = optim.SGD(pg, lr=hyp["lr0"], momentum=hyp["momentum"],
                           weight_decay=hyp["weight_decay"], nesterov=True)
-
+    
+    results_file = os.path.joint(opt.result_dir, "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+    if not os.path.exists(results_file):
+        os.makedirs(results_file)
     start_epoch = 0
     best_map = 0.0
     if weights.endswith(".pt") or weights.endswith(".pth"):
@@ -110,7 +107,7 @@ def train(hyp):
             optimizer.load_state_dict(ckpt["optimizer"])
             if "best_map" in ckpt.keys():
                 best_map = ckpt["best_map"]
-
+    
         # load results
         if ckpt.get("training_results") is not None:
             with open(results_file, "w") as file:
@@ -145,7 +142,7 @@ def train(hyp):
 
     # dataset
     # 训练集的图像尺寸指定为multi_scale_range中最大的尺寸
-    train_dataset = LoadImagesAndLabels(train_path, imgsz_train, batch_size,
+    train_dataset = LoadImagesAndLabels(train_path, train_label_path, imgsz_train, batch_size,
                                         augment=True,
                                         hyp=hyp,  # augmentation hyperparameters
                                         rect=opt.rect,  # rectangular training
@@ -153,7 +150,7 @@ def train(hyp):
                                         single_cls=opt.single_cls)
 
     # 验证集的图像尺寸指定为img_size(512)
-    val_dataset = LoadImagesAndLabels(test_path, imgsz_test, batch_size,
+    val_dataset = LoadImagesAndLabels(test_path, test_label_path, imgsz_test, batch_size,
                                       hyp=hyp,
                                       rect=True,  # 将每个batch的图像调整到合适大小，可减少运算量(并不是512x512标准尺寸)
                                       cache_images=opt.cache_images,
@@ -187,6 +184,13 @@ def train(hyp):
     # coco = None
     coco = get_coco_api_from_dataset(val_dataset)
 
+    if not os.path.exists(opt.weight_dir):
+        os.makedirs(opt.weight_dir)
+    if not os.path.exists(opt.log_dir):
+        os.makedirs(opt.log_dir)
+    print('Start Tensorboard with "tensorboard --logdir=opt.log_dir", view at http://localhost:6006/')
+    tb_writer = SummaryWriter(comment=opt.name, log_dir=opt.log_dir)
+    t0 = time.time()
     print("starting traning for %g epochs..." % epochs)
     print('Using %g dataloader workers' % nw)
     for epoch in range(start_epoch, epochs):
@@ -240,7 +244,7 @@ def train(hyp):
                         'training_results': f.read(),
                         'epoch': epoch,
                         'best_map': best_map}
-                    torch.save(save_files, "./weights/yolov3spp-{}.pt".format(epoch))
+                    torch.save(save_files, os.path.join(opt.weight_dir, "yolov3spp-{}.pt".format(epoch)))
             else:
                 # only save best weights
                 if best_map == coco_mAP:
@@ -251,31 +255,51 @@ def train(hyp):
                             'training_results': f.read(),
                             'epoch': epoch,
                             'best_map': best_map}
-                        torch.save(save_files, best.format(epoch))
-
+                        torch.save(save_files, os.path.join(opt.weight_dir, "best-{}.pt".format(epoch)))
+    print('%g epochs completed in %.3f hours.\n' % (opt.epochs, (time.time() - t0) / 3600))
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=20)
-    parser.add_argument('--batch-size', type=int, default=8)
+    parser.add_argument('--device', default=DATA_SEED, help='device id (i.e. 0 or 0,1 or cpu)')
+    parser.add_argument('--epochs', type=int, default=EPOCHS)
+    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE)
     parser.add_argument('--cfg', type=str, default='cfg/my_yolov3.cfg', help="*.cfg path")
     parser.add_argument('--data', type=str, default='data/my_data.data', help='*.data path')
     parser.add_argument('--hyp', type=str, default='cfg/hyp.yaml', help='hyperparameters path')
     parser.add_argument('--multi-scale', type=bool, default=True,
                         help='adjust (67%% - 150%%) img_size every 10 batches')
     parser.add_argument('--img-size', type=int, default=608, help='test size')
-    parser.add_argument('--rect', action='store_true', help='rectangular training')
+    parser.add_argument('--rect', default=True,  help='rectangular training')
     parser.add_argument('--savebest', type=bool, default=False, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--weights', type=str, default='weights/yolov3-spp-ultralytics-512.pt',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
-    parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
-    parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
+    parser.add_argument('--single-cls', default=True,  help='train as single-class dataset')
     parser.add_argument('--freeze-layers', type=bool, default=False, help='Freeze non-output layers')
+    # 训练数据集的根目录(VOCdevkit)scr
+    parser.add_argument('--data_path', default='./real_syn_wdt_vockit/{}', help='dataset')
+    # 权重文件保存地址
+    parser.add_argument('--weight_dir', default='./save_weights/{}/{}', help='path where to save weight')
+    # log文件保存地址
+    parser.add_argument('--log_dir', default='./save_logs/{}/{}', help='path where to save weight')
+    # ap pr figures文件保存地址
+    parser.add_argument('--fig_dir', default='./save_figures/{}/{}', help='path where to save figures')
+    # pr results 文件保存地址
+    parser.add_argument('--result_dir', default='./save_results/{}/{}', help='path where to save results')
     opt = parser.parse_args()
-
+    
+    from parameters import *
+    cmt_seed = f'{CMT}_dataseed{DATA_SEED}'
+    time_marker = time.strftime('%Y%m%d_%H%M', time.localtime())
+    folder_name = f'lr{opt.lr}_bs{opt.batch_size}_{opt.epochs}epochs_{time_marker}' # FPN Pixel attention mask
+    opt.weight_dir = opt.weight_dir.format(cmt_seed, folder_name)
+    opt.log_dir = opt.log_dir.format(cmt_seed, folder_name)
+    opt.fig_dir = opt.fig_dir.format(cmt_seed, folder_name)
+    opt.result_dir = opt.result_dir.format(cmt_seed, folder_name)
+    
     # 检查文件是否存在
     opt.cfg = check_file(opt.cfg)
     opt.data = check_file(opt.data)
@@ -285,6 +309,4 @@ if __name__ == '__main__':
     with open(opt.hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)
 
-    print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-    tb_writer = SummaryWriter(comment=opt.name)
     train(hyp)
