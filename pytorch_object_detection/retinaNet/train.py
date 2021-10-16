@@ -35,7 +35,7 @@ def create_model(num_classes):
     return model
 
 
-def main(parser_data):
+def main(parser_data, dir_args, train_syn=True):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
@@ -46,13 +46,20 @@ def main(parser_data):
     }
 
     VOC_root = parser_data.data_path
+    if train_syn:
+        data_imgs_dir = dir_args.syn_data_imgs_dir
+        voc_annos_dir = dir_args.syn_voc_annos_dir
+    else:
+        data_imgs_dir = dir_args.real_imgs_dir
+        voc_annos_dir = dir_args.real_voc_annos_dir
     # check voc root
-    if os.path.exists(os.path.join(VOC_root, "VOCdevkit")) is False:
-        raise FileNotFoundError("VOCdevkit dose not in path:'{}'.".format(VOC_root))
+    if not os.path.exists(os.path.join(VOC_root, "Main")):
+        raise FileNotFoundError("real_syn_wdt_vockit dose not in path:'{}'.".format(os.path.join(VOC_root, "Main")))
 
     # load train data set
-    # VOCdevkit -> VOC2012 -> ImageSets -> Main -> train.txt
-    train_dataset = VOCDataSet(VOC_root, "2012", data_transform["train"], "train.txt")
+    # real_syn_wdt_vockit -> cmt ->  Main -> train.txt
+    train_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, transforms=data_transform["train"], txt_name=f"train_seed{parser_data.data_seed}.txt")
+    train_sampler = None
     train_sampler = None
 
     # 是否按图片相似高宽比采样图片组成batch
@@ -85,7 +92,7 @@ def main(parser_data):
 
     # load validation data set
     # VOCdevkit -> VOC2012 -> ImageSets -> Main -> val.txt
-    val_dataset = VOCDataSet(VOC_root, "2012", data_transform["val"], "val.txt")
+    val_dataset = VOCDataSet(VOC_root, data_imgs_dir, voc_annos_dir, transforms=data_transform["val"], txt_name=f"val_seed{parser_data.data_seed}.txt")
     val_data_loader = torch.utils.data.DataLoader(val_dataset,
                                                   batch_size=1,
                                                   shuffle=False,
@@ -248,12 +255,12 @@ if __name__ == "__main__":
     args.log_dir = args.log_dir.format(cmt_seed, folder_name)
     args.fig_dir = args.fig_dir.format(cmt_seed, folder_name)
     args.result_dir = args.result_dir.format(cmt_seed, folder_name)
-    # from data_utils import yolo2voc
-    # dir_args = yolo2voc.get_dir_arg(CMT, syn=train_syn)
+    from syn_real_dir import get_dir_arg
+    dir_args = get_dir_arg(CMT, syn=train_syn)
     print(args)
     
     # # 检查保存权重文件夹是否存在，不存在则创建
     # if not os.path.exists(args.output_dir):
     #     os.makedirs(args.output_dir)
 
-    main(args)
+    main(args, get_dir_arg, train_syn)
