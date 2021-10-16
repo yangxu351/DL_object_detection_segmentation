@@ -14,9 +14,9 @@ from scipy.spatial import KDTree
 from sklearn.metrics import precision_recall_curve, average_precision_score
 
 # Own modules
-from .metric_util import iou_metric
-from .misc_util import load_file
-from .vis_util import compare_figures
+from object_score_util.metric_util import iou_metric
+from object_score_util.misc_util import load_file
+from object_score_util.vis_util import compare_figures
 
 
 def display_group(reg_groups, size, img=None, need_return=False):
@@ -60,6 +60,46 @@ def get_stats_from_group(reg_group, conf_img=None):
         return coords, conf
     else:
         return coords
+
+def coord_iou_sigle(coords_a, coords_b):
+    """
+    This code comes from https://stackoverflow.com/a/42874377
+    :param coords_a: [xtl, ytl, xbr, ybr]
+    :param coords_b: [xtl, ytl, xbr, ybr]
+    :return:
+    """
+
+    # y1, x1 = np.min(coords_a, axis=0)
+    # y2, x2 = np.max(coords_a, axis=0)
+    # # bb1 = {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2}
+    # y1, x1 = np.min(coords_b, axis=0)
+    # y2, x2 = np.max(coords_b, axis=0)
+    # bb2 = {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2}
+    # print('coords_a {} {}'.format(coords_a[0], coords_a[2]))
+    assert coords_a[0] <= coords_a[2]
+    assert coords_a[1] <= coords_a[3]
+    assert coords_b[0] <= coords_b[2]
+    assert coords_b[1] <= coords_b[3]
+
+    x_left = max(coords_a[0], coords_b[0])
+    y_top = max(coords_a[1], coords_b[1])
+    x_right = min(coords_a[2], coords_b[2])
+    y_bottom = min(coords_a[3], coords_b[3])
+
+    if x_right < x_left or y_bottom < y_top:
+        return 0.0
+    intersection_area = (x_right - x_left) * (y_bottom - y_top)
+    bb1_area = (coords_a[2] - coords_a[0]) * (coords_a[3] - coords_a[1])
+    bb2_area = (coords_b[2] - coords_b[0]) * (coords_b[3] - coords_b[1])
+    iou = intersection_area / float(bb1_area + bb2_area - intersection_area)
+    # if iou>0.5:
+    #     print(x_left, y_top, x_right, y_bottom)
+    # if not iou:
+    #     print('bb1_area', bb1_area)
+    #     print('bb2_area', bb2_area)
+    #     print('intersection_area', intersection_area)
+    assert 0.0 <= iou <= 1.0, print(iou)
+    return iou
 
 
 def coord_iou(coords_a, coords_b):
