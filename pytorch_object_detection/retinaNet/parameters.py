@@ -1,5 +1,5 @@
-# BASE_DIR= '/media/lab/Yang'  # Thor
-BASE_DIR= '/data/users/yang' # Groot
+BASE_DIR= '/media/lab/Yang'  # Thor
+# BASE_DIR= '/data/users/yang' # Groot
 
 CMT = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
 DATA_SEED = 0

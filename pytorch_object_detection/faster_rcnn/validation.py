@@ -15,7 +15,7 @@ from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
-from parameters import BASE_DIR, DATA_SEED
+from parameters import BASE_DIR
 import json 
 
 class MyEncoder(json.JSONEncoder):
@@ -201,6 +201,17 @@ def main(parser_data, dir_args, val_all=False):
         with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
             json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
 
+    # img-anns dict    
+    val_anns = []
+    for ann in coco_eval.cocoDt['anns'].keys():
+        val_anns.append(ann)
+
+    # save img-anns dict
+    if len(val_anns):
+        result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
+        with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
+            json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
+
     # 将验证结果保存至txt文件中
     if not os.path.exists(parser_data.result_dir):
         os.makedirs(parser_data.result_dir) 
@@ -233,7 +244,7 @@ if __name__ == "__main__":
     syn = False
     from data_utils import yolo2voc
     dir_args = yolo2voc.get_dir_arg(real_cmt, syn)
-
+    
     parser = argparse.ArgumentParser(
         description=__doc__)
 

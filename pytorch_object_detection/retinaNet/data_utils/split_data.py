@@ -2,7 +2,8 @@ import os
 import random
 import argparse
 import glob
-from parameters import BASE_DIR
+import sys
+sys.path.append('.')
 from syn_real_dir import get_dir_arg
 
 
