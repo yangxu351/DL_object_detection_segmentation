@@ -175,13 +175,13 @@ def main(parser_data, dir_args, train_syn=True):
                         'AR_IoU_0.50_0.95_area_large_maxDets_100', 'loss', 'lr']
                 # print('result_info', len(result_info))
                 # print('tags', len(tags))
-                # dict_tag_reslut_info = {k: float(v) for k, v in zip(tags, result_info)}
-                # # print('dict_tag_reslut_info', dict_tag_reslut_info)
-                # tb_writer.add_scalars('IOU metric', dict_tag_reslut_info, epoch)
-                for x, tag in zip(result_info, tags):
-                    # print('x', x)
-                    # print('tag', tag)
-                    tb_writer.add_scalar(tag, x, epoch)
+                dict_tag_reslut_info = {k: float(v) for k, v in zip(tags, result_info)}
+                # print('dict_tag_reslut_info', dict_tag_reslut_info)
+                tb_writer.add_scalars('IOU metric', dict_tag_reslut_info, epoch)
+                # for x, tag in zip(result_info, tags):
+                #     # print('x', x)
+                #     # print('tag', tag)
+                #     tb_writer.add_scalar(tag, x, epoch)
 
         val_map.append(coco_info[1])  # pascal map
 
