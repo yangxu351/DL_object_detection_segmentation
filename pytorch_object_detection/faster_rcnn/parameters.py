@@ -13,7 +13,7 @@ WITH_PA = False # True False,  Pixel attention
 ### with FPN Mask multiply
 WITH_FPN_MASK = False # True False,  
 ### with RPN Mask multiply
-WITH_RPN_MASK = False # True False
+WITH_RPN_MASK = True # True False
  
 # SOFT_VAL = 1 
 if WITH_RPN_MASK:
@@ -23,4 +23,4 @@ elif WITH_FPN_MASK:
 else:
     SOFT_VAL = 1 # do not directly multiply masks
 
-DEVICE= 'cuda:0'
+DEVICE= 'cuda:1'
