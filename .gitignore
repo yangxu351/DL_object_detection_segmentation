@@ -24,3 +24,5 @@ save_figures/
 save_results/
 .vscode/
 *.pyc
+real_syn_wdt_vockit/syn_wdt*/
+data/syn_wdt*/
