@@ -158,6 +158,8 @@ def main(parser_data, val_all=False):
     cpu_device = torch.device("cpu")
 
     model.eval()
+    cnt = 0
+    val_anns = []
     with torch.no_grad():
         for image, targets, masks in tqdm(val_dataset_loader, desc="validation..."):
             # 将图片传入指定设备device
@@ -167,6 +169,15 @@ def main(parser_data, val_all=False):
             outputs = model(image)
 
             outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
+            boxes = outputs[0]['boxes'].data.numpy()
+            scores = outputs[0]['scores'].data.numpy()
+            labels = outputs[0]['labels'].data.numpy()
+            for ix, box in enumerate(boxes):
+                val_anns.append({'image_id': cnt, # image_id,
+                            'category_id': labels[ix],
+                            'bbox': [round(x, 3) for x in box],
+                            'score': round(scores[ix], 4)})
+            cnt += 1
             res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
             coco_evaluator.update(res)
 
@@ -190,11 +201,6 @@ def main(parser_data, val_all=False):
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
 
-    # img-anns dict    
-    val_anns = []
-    for ann in coco_eval.cocoDt['anns'].keys():
-        val_anns.append(ann)
-
     # save img-anns dict
     if len(val_anns):
         result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
@@ -216,28 +222,28 @@ def main(parser_data, val_all=False):
 if __name__ == "__main__":
     val_all = True     # validate on both real train and real val set
     # val_all = False  # only for validation set
-    # real_cmt = 'xilin_wdt'
-    real_cmt = 'DJI_wdt'
+    real_cmt = 'xilin_wdt'
+    # real_cmt = 'DJI_wdt'
     
     # folder_name = 'lr0.05_bs8_20epochs_MaskFalse_softval1.0_20211012_0905'     #  0.338(val) 0.2982(all) for xilin, 0.261 for DJI
     # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211014_0018'         #  0.3452(val) 0.2941(all) for xilin, 0.3463 for DJI. cuda2 5.856 hours.
+    folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211015_2121'            #  0.30116 (all) for xilin, 0.2572 for DJI
     # epc = 19
     # folder_name = 'lr0.05_bs8_20epochs_MaskTrue_softval0.5_20211012_2050'        # 0.1827 for xilin, 0.2109 for DJI
     # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_20211013_0826'      # 0.4236(val) 0.3345(all) for xilin, 0.2894 for DJI
-    folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211014_0137'       #0.4500(val) 0.3791(all) for xilin,  0.2050 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211014_0137'       #0.4500(val) 0.3791(all) for xilin,  0.2050 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211015_2123'        #  0.383 (all) for xilin, 0.2095 for DJI
     epc = 19
     # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.1_20211011_2325'
     # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.5_20211011_2326'        # 0.132 for xilin,  0.2894 for DJI
     # epc = 49
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = False
-    from data_utils import yolo2voc
-    dir_args = yolo2voc.get_dir_arg(real_cmt, syn)
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda:0', help='device')
+    parser.add_argument('--device', default='cuda:1', help='device')
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
     # 检测目标类别数
