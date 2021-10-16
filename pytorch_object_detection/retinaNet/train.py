@@ -186,6 +186,8 @@ def main(parser_data, dir_args, train_syn=True):
         val_map.append(coco_info[1])  # pascal map
 
         # save weights
+        if not os.path.exists(parser_data.weight_dir):
+            os.makedirs(parser_data.weight_dir)
         if epoch % 10 == 0 or epoch >= parser_data.epochs - 1:
             save_files = {
                 'model': model.state_dict(),
