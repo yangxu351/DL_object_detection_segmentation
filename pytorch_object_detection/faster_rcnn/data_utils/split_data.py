@@ -2,6 +2,8 @@ import os
 import random
 import argparse
 import glob
+import sys
+sys.path.append('.')
 from parameters import BASE_DIR
 
 def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, workbase_data_dir='./real_syn_wdt_vockit'):

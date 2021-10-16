@@ -23,3 +23,5 @@ save_logs/
 save_figures/
 save_results/
 real_syn_wdt_vockit/syn*/*.txt
+.vscode/
+*.pyc
