@@ -8,7 +8,18 @@ from models import *
 from build_utils.datasets import *
 from build_utils.utils import *
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
+import json 
 
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
 
 def summarize(self, catId=None):
     """
@@ -87,7 +98,7 @@ def main(parser_data):
     print("Using {} device training.".format(device.type))
 
     # read class_indict
-    label_json_path = './data/pascal_voc_classes.json'
+    label_json_path = './data/wdt_classes.json'
     assert os.path.exists(label_json_path), "json file {} dose not exist.".format(label_json_path)
     json_file = open(label_json_path, 'r')
     class_dict = json.load(json_file)
@@ -96,6 +107,7 @@ def main(parser_data):
 
     data_dict = parse_data_cfg(parser_data.data)
     test_path = data_dict["valid"]
+    test_label_path = data_dict['valid_label']
 
     # 注意这里的collate_fn是自定义的，因为读取的数据包括image和targets，不能直接使用默认的方法合成batch
     batch_size = parser_data.batch_size
@@ -103,7 +115,7 @@ def main(parser_data):
     print('Using %g dataloader workers' % nw)
 
     # load validation data set
-    val_dataset = LoadImagesAndLabels(test_path, parser_data.img_size, batch_size,
+    val_dataset = LoadImagesAndLabels(test_path, test_label_path, parser_data.img_size, batch_size,
                                       hyp=parser_data.hyp,
                                       rect=True)  # 将每个batch的图像调整到合适大小，可减少运算量(并不是512x512标准尺寸)
 
@@ -173,9 +185,22 @@ def main(parser_data):
 
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
+    
+    # img-anns dict    
+    val_anns = []
+    for ann in coco_eval.cocoDt['anns'].keys():
+        val_anns.append(ann)
+
+    # save img-anns dict
+    if len(val_anns):
+        result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
+        with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
+            json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
 
     # 将验证结果保存至txt文件中
-    with open("record_mAP.txt", "w") as f:
+    if not os.path.exists(parser_data.result_dir):
+        os.makedirs(parser_data.result_dir) 
+    with open(os.path.join(parser_data.result_dir, f"{real_cmt}_allset{val_all}_record_mAP.txt"), "w") as f:
         record_lines = ["COCO results:",
                         print_coco,
                         "",
@@ -186,28 +211,43 @@ def main(parser_data):
 
 if __name__ == "__main__":
     import argparse
+    from parameters import DATA_SEED
+
+    val_all = True     # validate on both real train and real val set
+    # val_all = False  # only for validation set
+    # real_cmt = 'xilin_wdt'
+    real_cmt = 'DJI_wdt'
+    
+    folder_name = ''       #(val) (all) for xilin,   for DJI
+    epc = 19
+    syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    syn = False
 
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda', help='device')
+    parser.add_argument('--device', default='cuda:0', help='device')
 
     # 检测目标类别数
-    parser.add_argument('--num-classes', type=int, default='20', help='number of classes')
+    parser.add_argument('--num-classes', type=int, default=1, help='number of classes')
 
     parser.add_argument('--cfg', type=str, default='cfg/my_yolov3.cfg', help="*.cfg path")
     parser.add_argument('--data', type=str, default='data/my_data.data', help='*.data path')
     parser.add_argument('--hyp', type=str, default='cfg/hyp.yaml', help='hyperparameters path')
-    parser.add_argument('--img-size', type=int, default=512, help='test size')
+    parser.add_argument('--img-size', type=int, default=608, help='test size')
 
+    # 数据集的根目录(VOCdevkit)
+    parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
+        
+    # pr results 文件保存地址
+    parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}', help='path where to save results')
+    
     # 训练好的权重文件
-    parser.add_argument('--weights', default='./weights/yolov3spp-voc-512.pt', type=str, help='training weights')
+    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
 
     # batch size
-    parser.add_argument('--batch_size', default=1, type=int, metavar='N',
-                        help='batch size when validation.')
+    parser.add_argument('--batch_size', default=1, type=int, metavar='N', help='batch size when validation.')
 
     args = parser.parse_args()
-
     main(args)

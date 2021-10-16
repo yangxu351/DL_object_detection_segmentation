@@ -15,7 +15,7 @@ from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
-from parameters import BASE_DIR
+from parameters import BASE_DIR, DATA_SEED
 import json 
 
 class MyEncoder(json.JSONEncoder):
@@ -101,7 +101,7 @@ def summarize(self, catId=None):
     return stats, print_info
 
 
-def main(parser_data, dir_args, val_all=False):
+def main(parser_data, val_all=False):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
@@ -130,7 +130,7 @@ def main(parser_data, dir_args, val_all=False):
 
     # load validation data set
     txt_name = "all.txt" if val_all else f"val_seed{parser_data.data_seed}.txt"
-    val_dataset = VOCDataSet(VOC_root, dir_args.real_imgs_dir, dir_args.real_voc_annos_dir, transforms=data_transform["val"], txt_name=txt_name)
+    val_dataset = VOCDataSet(VOC_root, parser_data.real_imgs_dir, parser_data.real_voc_annos_dir, transforms=data_transform["val"], txt_name=txt_name)
     val_dataset_loader = torch.utils.data.DataLoader(val_dataset,
                                                      batch_size=1,
                                                      shuffle=False,
@@ -189,17 +189,6 @@ def main(parser_data, dir_args, val_all=False):
 
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
-    
-    # img-anns dict    
-    val_anns = []
-    for ann in coco_eval.cocoDt['anns'].keys():
-        val_anns.append(ann)
-
-    # save img-anns dict
-    if len(val_anns):
-        result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
-        with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
-            json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
 
     # img-anns dict    
     val_anns = []
@@ -244,7 +233,6 @@ if __name__ == "__main__":
     syn = False
     from data_utils import yolo2voc
     dir_args = yolo2voc.get_dir_arg(real_cmt, syn)
-    
     parser = argparse.ArgumentParser(
         description=__doc__)
 
@@ -274,4 +262,4 @@ if __name__ == "__main__":
     
     args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, real_cmt)
     args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, real_cmt)
-    main(args, dir_args, val_all)
+    main(args, val_all)
