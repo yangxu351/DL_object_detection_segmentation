@@ -129,7 +129,7 @@ def main(parser_data, dir_args, val_all=False):
     print('Using %g dataloader workers' % nw)
 
     # load validation data set
-    txt_name = "all.txt" if val_all else "val.txt"
+    txt_name = "all.txt" if val_all else f"val_seed{parser_data.data_seed}.txt"
     val_dataset = VOCDataSet(VOC_root, dir_args.real_imgs_dir, dir_args.real_voc_annos_dir, transforms=data_transform["val"], txt_name=txt_name)
     val_dataset_loader = torch.utils.data.DataLoader(val_dataset,
                                                      batch_size=1,
@@ -249,8 +249,9 @@ if __name__ == "__main__":
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda:1', help='device')
-
+    parser.add_argument('--device', default='cuda:0', help='device')
+    # 数据分割种子
+    parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
     # 检测目标类别数
     parser.add_argument('--num-classes', type=int, default=1, help='number of classes')
 
@@ -261,10 +262,10 @@ if __name__ == "__main__":
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
         
     # pr results 文件保存地址
-    parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}/{folder_name}', help='path where to save results')
+    parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}', help='path where to save results')
     
     # 训练好的权重文件
-    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
+    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
 
     # batch size
     parser.add_argument('--batch_size', default=1, type=int, metavar='N', help='batch size when validation.')

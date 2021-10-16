@@ -256,14 +256,14 @@ def train(hyp):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=30)
-    parser.add_argument('--batch-size', type=int, default=4)
+    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--cfg', type=str, default='cfg/my_yolov3.cfg', help="*.cfg path")
     parser.add_argument('--data', type=str, default='data/my_data.data', help='*.data path')
     parser.add_argument('--hyp', type=str, default='cfg/hyp.yaml', help='hyperparameters path')
     parser.add_argument('--multi-scale', type=bool, default=True,
                         help='adjust (67%% - 150%%) img_size every 10 batches')
-    parser.add_argument('--img-size', type=int, default=512, help='test size')
+    parser.add_argument('--img-size', type=int, default=608, help='test size')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--savebest', type=bool, default=False, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
