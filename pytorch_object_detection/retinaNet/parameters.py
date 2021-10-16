@@ -9,4 +9,4 @@ EPOCHS = 20 # 20
 BATCH_SIZE = 8
 LEARNING_RATE = 0.05 
 
-DEVICE= 'cuda:1'
+DEVICE= 'cuda:0'
