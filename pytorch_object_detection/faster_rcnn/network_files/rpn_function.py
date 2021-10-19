@@ -281,7 +281,8 @@ class RPNMaskHead(nn.Module):
                 msk = F.interpolate(masks, size=feat_shape, mode="nearest")
                 if self.soft_val == -1:
                     soft_msk = torch.rand_like(msk)
-                    soft_msk[msk==1] = 1
+                    # soft_msk[msk==1] = 1
+                    soft_msk[msk!=0] = 1
                     msk=soft_msk
                 else:
                     msk[msk==0] = self.soft_val
