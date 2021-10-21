@@ -38,7 +38,7 @@ def parse_xml_to_dict(xml):
     return {xml.tag: result}
 
 
-def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres=0.2):
+def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres=0.2, pred_box_color=(0, 255, 255)):
     
     iou_check_save_dir = os.path.join(real_args.real_base_dir, f'real_WDT_{real_cmt}_gt_prd_bbox', syn_cmt, folder_name)
     if not os.path.exists(iou_check_save_dir):
@@ -83,9 +83,9 @@ def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres
                 p_bbx = [int(round(p)) for p in p_bbx]
                 if iou >= iou_thres:
                     print('iou', iou)
-                    img = cv2.rectangle(img, (p_bbx[0], p_bbx[1]), (p_bbx[2], p_bbx[3]), (0, 255, 255), 2)
+                    img = cv2.rectangle(img, (p_bbx[0], p_bbx[1]), (p_bbx[2], p_bbx[3]), pred_box_color, 2)
                     # text = 'cf:{:.3f} iou:{:.2f}'.format(p['score'], iou) 
-                    text = 'cf:{:.3f}'.format(p['score']) 
+                    text = 'conf:{:.2f}'.format(p['score']) 
                     cv2.putText(img, text=text, org=(p_bbx[0] + 10, p_bbx[1] + 10), # [pr_bx[0], pr[-1]]
                                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                                 fontScale=0.5, thickness=1, lineType=cv2.LINE_AA, color=(134, 0, 0))
@@ -109,9 +109,10 @@ if __name__ == '__main__':
     
     
     # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211015_2121'
+    # pred_box_color = (114,128,250) # salmon
     folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211015_2123'
-   
-    check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres, iou_thres)
+    pred_box_color = (0,255,255) # yellow
+    check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres, iou_thres, pred_box_color)
 
 
    
