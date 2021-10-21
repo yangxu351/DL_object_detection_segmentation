@@ -10,10 +10,23 @@ import torch
 from tqdm import tqdm
 import numpy as np
 
+import argparse
 import transforms
 from src import Backbone, SSD300
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
+import json 
+
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
 
 
 def summarize(self, catId=None):
@@ -99,7 +112,7 @@ def main(parser_data):
     }
 
     # read class_indict
-    label_json_path = './pascal_voc_classes.json'
+    label_json_path = './wdt_classes.json'
     assert os.path.exists(label_json_path), "json file {} dose not exist.".format(label_json_path)
     json_file = open(label_json_path, 'r')
     class_dict = json.load(json_file)
@@ -108,7 +121,7 @@ def main(parser_data):
 
     VOC_root = parser_data.data_path
     # check voc root
-    if os.path.exists(os.path.join(VOC_root, "VOCdevkit")) is False:
+    if os.path.exists(VOC_root) is False:
         raise FileNotFoundError("VOCdevkit dose not in path:'{}'.".format(VOC_root))
 
     # 注意这里的collate_fn是自定义的，因为读取的数据包括image和targets，不能直接使用默认的方法合成batch
@@ -118,7 +131,8 @@ def main(parser_data):
 
     # load validation data set
     # VOCdevkit -> VOC2012 -> ImageSets -> Main -> val.txt
-    val_dataset = VOCDataSet(VOC_root, "2012", transforms=data_transform["val"], train_set="val.txt")
+    txt_name = "all.txt" if val_all else f"val_seed{parser_data.data_seed}.txt"
+    val_dataset = VOCDataSet(VOC_root, parser_data.real_imgs_dir, parser_data.real_voc_annos_dir, transforms=data_transform["val"], txt_name=txt_name)
     val_dataset_loader = torch.utils.data.DataLoader(val_dataset,
                                                      batch_size=batch_size,
                                                      shuffle=False,
@@ -145,6 +159,7 @@ def main(parser_data):
     cpu_device = torch.device("cpu")
 
     model.eval()
+    val_anns = []
     with torch.no_grad():
         for images, targets in tqdm(val_dataset_loader, desc="validation..."):
             # 将图片传入指定设备device
@@ -165,6 +180,15 @@ def main(parser_data):
                         "labels": labels_out.to(cpu_device),
                         "scores": scores_out.to(cpu_device)}
                 outputs.append(info)
+
+                boxes = info['boxes'].data.numpy()
+                scores = info['scores'].data.numpy()
+                labels = info['labels'].data.numpy()
+                for ix, box in enumerate(boxes):
+                    val_anns.append({'image_id': index, # image_id,
+                                'category_id': labels[ix],
+                                'bbox': [round(x, 3) for x in box],
+                                'score': round(scores[ix], 4)})
 
             res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
             coco_evaluator.update(res)
@@ -188,8 +212,16 @@ def main(parser_data):
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
 
+    # save img-anns dict
+    if len(val_anns):
+        result_json_file = f'{real_cmt}_allset{val_all}_predictions.json'
+        with open(os.path.join(parser_data.result_dir, result_json_file), 'w') as file:
+            json.dump(val_anns, file, ensure_ascii=False, indent=2, cls=MyEncoder)
+
     # 将验证结果保存至txt文件中
-    with open("record_mAP.txt", "w") as f:
+    if not os.path.exists(parser_data.result_dir):
+        os.makedirs(parser_data.result_dir) 
+    with open(os.path.join(parser_data.result_dir, f"{real_cmt}_allset{val_all}_record_mAP.txt"), "w") as f:
         record_lines = ["COCO results:",
                         print_coco,
                         "",
@@ -199,27 +231,44 @@ def main(parser_data):
 
 
 if __name__ == "__main__":
-    import argparse
+    from parameters import DATA_SEED, BASE_DIR
+
+    val_all = True     # validate on both real train and real val set
+    # val_all = False  # only for validation set
+    real_cmt = 'xilin_wdt'
+    # real_cmt = 'DJI_wdt'
+    folder_name = ''
+    epc = 19
+    syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    syn = False
 
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda', help='device')
-
+    parser.add_argument('--device', default='cuda:3', help='device')
+    # 数据分割种子
+    parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
     # 检测目标类别数
-    parser.add_argument('--num-classes', type=int, default='20', help='number of classes')
+    parser.add_argument('--num-classes', type=int, default=1, help='number of classes')
 
-    # 数据集的根目录(VOCdevkit根目录)
-    parser.add_argument('--data-path', default='/data/', help='dataset root')
-
+    # 数据集的根目录(VOCdevkit)
+    parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
+    parser.add_argument("--real_base_dir", type=str,default=f'{BASE_DIR}/data/wind_turbine', help="base path of synthetic data")
+    parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
+    parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
+        
+    # pr results 文件保存地址
+    parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}', help='path where to save results')
+    
     # 训练好的权重文件
-    parser.add_argument('--weights', default='./save_weights/model.pth', type=str, help='training weights')
+    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
 
     # batch size
     parser.add_argument('--batch_size', default=1, type=int, metavar='N',
                         help='batch size when validation.')
 
     args = parser.parse_args()
-
+    args.real_imgs_dir = args.real_imgs_dir.format(args.real_base_dir, real_cmt)
+    args.real_voc_annos_dir = args.real_voc_annos_dir.format(args.real_base_dir, real_cmt)
     main(args)

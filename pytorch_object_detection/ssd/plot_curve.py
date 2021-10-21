@@ -1,8 +1,9 @@
 import datetime
 import matplotlib.pyplot as plt
+import os
 
 
-def plot_loss_and_lr(train_loss, learning_rate):
+def plot_loss_and_lr(train_loss, learning_rate, parser_data):
     try:
         x = list(range(len(train_loss)))
         fig, ax1 = plt.subplots(1, 1)
@@ -23,14 +24,16 @@ def plot_loss_and_lr(train_loss, learning_rate):
         plt.legend(handles1 + handles2, labels1 + labels2, loc='upper right')
 
         fig.subplots_adjust(right=0.8)  # 防止出现保存图片显示不全的情况
-        fig.savefig('./loss_and_lr{}.png'.format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+        if not os.path.exists(parser_data.fig_dir):
+            os.makedirs(parser_data.fig_dir)
+        fig.savefig(os.path.join(parser_data.fig_dir,'loss_and_lr{}.png'.format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))))
         plt.close()
         print("successful save loss curve! ")
     except Exception as e:
         print(e)
 
 
-def plot_map(mAP):
+def plot_map(mAP, parser_data):
     try:
         x = list(range(len(mAP)))
         plt.plot(x, mAP, label='mAp')
@@ -39,7 +42,9 @@ def plot_map(mAP):
         plt.title('Eval mAP')
         plt.xlim(0, len(mAP))
         plt.legend(loc='best')
-        plt.savefig('./mAP.png')
+        if not os.path.exists(parser_data.fig_dir):
+            os.makedirs(parser_data.fig_dir)
+        plt.savefig(os.path.join(parser_data.fig_dir,'mAP.png'))
         plt.close()
         print("successful save mAP curve!")
     except Exception as e:
