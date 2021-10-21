@@ -23,7 +23,7 @@ def create_model(num_classes, parser_data):
     backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d, returned_layers=[1,2,3,4],
                                      trainable_layers=3, withPA=parser_data.withPA, withFPNMask=parser_data.withFPNMask, soft_val=parser_data.soft_val)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, withRPNMask=parser_data.withRPNMask, soft_val=parser_data.soft_val)
+    model = FasterRCNN(backbone=backbone, num_classes=91, withRPNMask=parser_data.withRPNMask, soft_val=parser_data.soft_val, min_size=parser_data.input_size)
 
     # 载入预训练模型权重
     # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
@@ -273,6 +273,8 @@ if __name__ == "__main__":
     # 若需要接着上次训练，则指定上次训练保存权重文件地址 
     parser.add_argument('--resume', default='', type=str, help='resume from checkpoint')
     # 指定接着从哪个epoch数开始训练
+    parser.add_argument('--input_size', default=608, type=int, help='input size')
+    # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     # 训练的总epoch数
     parser.add_argument('--epochs', default=EPOCHS, type=int, metavar='N', help='number of total epochs to run')
@@ -300,13 +302,26 @@ if __name__ == "__main__":
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_nofpn_residual_att_btversky_seg{args.withPA}_{time_marker}'
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_bce_PA{args.withPA}_{time_marker}'
     if args.withFPNMask:
-        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_FPN_Mask{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN mask
+        if args.soft_val == -0.5:
+            folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_FPN_Mask{args.withFPNMask}_softval{args.soft_val}_halfmax_{time_marker}' # FPN mask
+        else:
+            folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_FPN_Mask{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN mask
     elif args.withPA:
         folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_{time_marker}' # FPN Pixel attention mask
     elif args.withRPNMask: 
-        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}' # RPN mask
+        ################### soft_msk[msk==1] = 1
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}' # RPN mask 
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}'
+         # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_halfmax_{time_marker}'
+        ################### soft_msk[msk!=0] = 1
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_nonzero_{time_marker}' 
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_nonzero_{time_marker}'
+        
     else:
-        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN Pixel attention mask
+        # FPN Pixel attention mask
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
+        
       
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_btversky_seg{args.withPA}_{time_marker}'
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_dice_seg{args.withPA}_{time_marker}' ## has no impact
@@ -315,8 +330,8 @@ if __name__ == "__main__":
     args.log_dir = args.log_dir.format(cmt_seed, folder_name)
     args.fig_dir = args.fig_dir.format(cmt_seed, folder_name)
     args.result_dir = args.result_dir.format(cmt_seed, folder_name)
-    from data_utils import yolo2voc
-    dir_args = yolo2voc.get_dir_arg(CMT, syn=train_syn)
+    from syn_real_dir import get_dir_arg
+    dir_args = get_dir_arg(CMT, syn=train_syn)
     # print(dir_args.syn_data_segs_dir)
     print(args)
     # 检查保存权重文件夹是否存在，不存在则创建

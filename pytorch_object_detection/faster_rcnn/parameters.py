@@ -13,17 +13,21 @@ WITH_PA = False # True False,  Pixel attention
 ### with FPN Mask multiply
 WITH_FPN_MASK = False # True False,  
 ### with RPN Mask multiply
-WITH_RPN_MASK = False # True False
+WITH_RPN_MASK = True # True False
  
-# SOFT_VAL = 1 
+
 if WITH_RPN_MASK:
-    SOFT_VAL = -1 # 0.5 0.1 1 # -1 represent random value in [0, 1)
+    # -1 represent random value in [0, 1)
+    SOFT_VAL = -1
+    # -1 represent random value in [0, 0.5)
+    # SOFT_VAL = -0.5 
+    # SOFT_VAL = 0.5 # 0.5 0.1 1 
 elif WITH_FPN_MASK:
     SOFT_VAL = -1 # 0.5 0.1 1 # -1 represent random value in [0, 1)
 else:
     SOFT_VAL = 1 # do not directly multiply masks
 
-DEVICE= 'cuda:1'
+DEVICE= 'cuda:2'
 
 ANNO_FORMAT = '.xml'
 REAL_IMG_FORMAT = '.jpg'
