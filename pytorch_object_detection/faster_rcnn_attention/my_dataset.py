@@ -34,7 +34,9 @@ def get_mask_from_bbox(h,w, boxes):
 
 def get_mask_from_seg_file(seg_file):
     mask =  np.array(Image.open(seg_file), dtype=np.float32)
-    mask = (255-mask)/255. #becasus default mask is white BG
+    # mask = (255-mask)/255. #becasus default mask is white BG
+    mask = (255-mask)/255
+    mask[mask>0] = 1
     return mask
 
 
