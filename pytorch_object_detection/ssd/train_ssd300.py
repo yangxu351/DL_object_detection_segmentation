@@ -38,10 +38,22 @@ def create_model(num_classes=21):
 
     return model
 
+def init_seeds(seed=0):
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    import torch.backends.cudnn as cudnn
+    # Remove randomness (may be slower on Tesla GPUs) # https://pytorch.org/docs/stable/notes/randomness.html
+    if seed == 0:
+        cudnn.deterministic = True
+        cudnn.benchmark = False
 
 def main(parser_data, dir_args, train_syn=True):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
+    if parser_data.model_seed is not None:
+        init_seeds(parser_data.model_seed)
 
     if train_syn:
         data_imgs_dir = dir_args.syn_data_imgs_dir
@@ -184,12 +196,12 @@ def main(parser_data, dir_args, train_syn=True):
     # plot loss and lr curve
     if len(train_loss) != 0 and len(learning_rate) != 0:
         from plot_curve import plot_loss_and_lr
-        plot_loss_and_lr(train_loss, learning_rate)
+        plot_loss_and_lr(train_loss, learning_rate, parser_data)
 
     # plot mAP curve
     if len(val_map) != 0:
         from plot_curve import plot_map
-        plot_map(val_map)
+        plot_map(val_map, parser_data)
     print('%g epochs completed in %.3f hours.\n' % (parser_data.epochs, (time.time() - t0) / 3600))
     # inputs = torch.rand(size=(2, 3, 300, 300))
     # output = model(inputs)
@@ -208,6 +220,8 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=DEVICE, help='device')
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
+    # 数据分割种子
+    parser.add_argument('--model-seed', default=MODEL_SEED, type=int, help='MODEL seed')
     # 学习率
     parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
     # 检测目标类别数(不包含背景)
