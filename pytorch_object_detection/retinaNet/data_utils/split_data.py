@@ -9,6 +9,8 @@ from syn_real_dir import get_dir_arg
 
 if __name__ == '__main__':
     data_seed = 0
+    # data_seed = 1
+    # data_seed = 2
     random.seed(data_seed)  # 设置随机种子，保证随机结果可复现
     cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = True
@@ -16,7 +18,7 @@ if __name__ == '__main__':
      
     # cmt = 'xilin_wdt'
     # syn = False
-    # val_rate = 0.3
+    # val_rate = 1 # 0.3
 
     # cmt = 'DJI_wdt'
     # syn = False
