@@ -34,10 +34,24 @@ def create_model(num_classes):
 
     return model
 
+def init_seeds(seed=0):
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    import torch.backends.cudnn as cudnn
+    # Remove randomness (may be slower on Tesla GPUs) # https://pytorch.org/docs/stable/notes/randomness.html
+    if seed == 0:
+        cudnn.deterministic = True
+        cudnn.benchmark = False
+
 
 def main(parser_data, dir_args, train_syn=True):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
+    
+    if parser_data.model_seed is not None:
+        init_seeds(parser_data.model_seed)
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -109,7 +123,7 @@ def main(parser_data, dir_args, train_syn=True):
 
     # define optimizer
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=0.005,
+    optimizer = torch.optim.SGD(params, lr=parser.lr,
                                 momentum=0.9, weight_decay=0.0005)
 
     # learning rate scheduler
@@ -200,12 +214,12 @@ def main(parser_data, dir_args, train_syn=True):
     # plot loss and lr curve
     if len(train_loss) != 0 and len(learning_rate) != 0:
         from plot_curve import plot_loss_and_lr
-        plot_loss_and_lr(train_loss, learning_rate)
+        plot_loss_and_lr(train_loss, learning_rate, parser_data=parser_data)
 
     # plot mAP curve
     if len(val_map) != 0:
         from plot_curve import plot_map
-        plot_map(val_map)
+        plot_map(val_map, parser_data)
     print('%g epochs completed in %.3f hours.\n' % (parser_data.epochs, (time.time() - t0) / 3600))
     
 
@@ -220,6 +234,8 @@ if __name__ == "__main__":
     parser.add_argument('--device', default=DEVICE, help='device')
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
+    # model 种子
+    parser.add_argument('--model-seed', default=MODEL_SEED, type=int, help='MODEL seed')
     # 学习率
     parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
     # 训练数据集的根目录(VOCdevkit)scr
