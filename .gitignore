@@ -26,3 +26,4 @@ save_results/
 *.pyc
 real_syn_wdt_vockit/syn_wdt*/
 data/syn_wdt*/
+*/rus/*

@@ -13,7 +13,7 @@ from train_utils import train_eval_utils as train_util
 from train_utils import get_coco_api_from_dataset
 
 
-def train(opt, dir_args, hyp, train_syn=True):
+def train(opt, hyp, train_syn=True):
     device = torch.device(opt.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
     
@@ -85,9 +85,9 @@ def train(opt, dir_args, hyp, train_syn=True):
     optimizer = optim.SGD(pg, lr=hyp["lr0"], momentum=hyp["momentum"],
                           weight_decay=hyp["weight_decay"], nesterov=True)
     
-    results_file = os.path.joint(opt.result_dir, "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
-    if not os.path.exists(results_file):
-        os.makedirs(results_file)
+    if not os.path.exists(opt.result_dir):
+        os.makedirs(opt.result_dir)
+    results_file = os.path.join(opt.result_dir, "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
     start_epoch = 0
     best_map = 0.0
     if weights.endswith(".pt") or weights.endswith(".pth"):
@@ -237,14 +237,15 @@ def train(opt, dir_args, hyp, train_syn=True):
 
             if opt.savebest is False:
                 # save weights every epoch
-                with open(results_file, 'r') as f:
-                    save_files = {
-                        'model': model.state_dict(),
-                        'optimizer': optimizer.state_dict(),
-                        'training_results': f.read(),
-                        'epoch': epoch,
-                        'best_map': best_map}
-                    torch.save(save_files, os.path.join(opt.weight_dir, "yolov3spp-{}.pt".format(epoch)))
+                if epoch % 10 == 0 or epoch >= opt.epochs - 1:
+                    with open(results_file, 'r') as f:
+                        save_files = {
+                            'model': model.state_dict(),
+                            'optimizer': optimizer.state_dict(),
+                            'training_results': f.read(),
+                            'epoch': epoch,
+                            'best_map': best_map}
+                        torch.save(save_files, os.path.join(opt.weight_dir, "yolov3spp-{}.pt".format(epoch)))
             else:
                 # only save best weights
                 if best_map == coco_mAP:
@@ -260,12 +261,13 @@ def train(opt, dir_args, hyp, train_syn=True):
     
 
 if __name__ == '__main__':
+    from parameters import *
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default=DATA_SEED, help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--epochs', type=int, default=EPOCHS)
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE)
-    parser.add_argument('--cfg', type=str, default='cfg/my_yolov3.cfg', help="*.cfg path")
-    parser.add_argument('--data', type=str, default='data/my_data.data', help='*.data path')
+    parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help="*.cfg path")
+    parser.add_argument('--data', type=str, default=f'data/{CMT}/{CMT}_seed{DATA_SEED}.data', help='*.data path')
     parser.add_argument('--hyp', type=str, default='cfg/hyp.yaml', help='hyperparameters path')
     parser.add_argument('--multi-scale', type=bool, default=True,
                         help='adjust (67%% - 150%%) img_size every 10 batches')
@@ -274,7 +276,7 @@ if __name__ == '__main__':
     parser.add_argument('--savebest', type=bool, default=False, help='only save best checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
-    parser.add_argument('--weights', type=str, default='weights/yolov3-spp-ultralytics-512.pt',
+    parser.add_argument('--weights', type=str, default='',
                         help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--single-cls', default=True,  help='train as single-class dataset')
@@ -290,23 +292,21 @@ if __name__ == '__main__':
     # pr results 文件保存地址
     parser.add_argument('--result_dir', default='./save_results/{}/{}', help='path where to save results')
     opt = parser.parse_args()
-    
+    # 检查文件是否存在
+    opt.cfg = check_file(opt.cfg)
+    opt.data = check_file(opt.data)
+    opt.hyp = check_file(opt.hyp)
+    with open(opt.hyp) as f:
+        hyp = yaml.load(f, Loader=yaml.FullLoader)
     from parameters import *
     cmt_seed = f'{CMT}_dataseed{DATA_SEED}'
     time_marker = time.strftime('%Y%m%d_%H%M', time.localtime())
-    folder_name = f'lr{opt.lr}_bs{opt.batch_size}_{opt.epochs}epochs_{time_marker}' # FPN Pixel attention mask
+    folder_name = f'lr{hyp["lr0"]}_bs{opt.batch_size}_{opt.epochs}epochs_{time_marker}' # FPN Pixel attention mask
     opt.weight_dir = opt.weight_dir.format(cmt_seed, folder_name)
     opt.log_dir = opt.log_dir.format(cmt_seed, folder_name)
     opt.fig_dir = opt.fig_dir.format(cmt_seed, folder_name)
     opt.result_dir = opt.result_dir.format(cmt_seed, folder_name)
     
-    # 检查文件是否存在
-    opt.cfg = check_file(opt.cfg)
-    opt.data = check_file(opt.data)
-    opt.hyp = check_file(opt.hyp)
     print(opt)
 
-    with open(opt.hyp) as f:
-        hyp = yaml.load(f, Loader=yaml.FullLoader)
-
-    train(hyp)
+    train(opt, hyp)

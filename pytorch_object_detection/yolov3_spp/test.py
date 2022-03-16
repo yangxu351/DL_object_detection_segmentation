@@ -156,7 +156,7 @@ def main(parser_data):
                     boxes = torch.empty((0, 4), device=cpu_device)
                 else:
                     # xmin, ymin, xmax, ymax
-                    boxes = p[:, :4]
+                    boxes = p[:, :4].clone()
                     # shapes: (h0, w0), ((h / h0, w / w0), pad)
                     # 将boxes信息还原回原图尺度，这样计算的mAP才是准确的
                     boxes = scale_coords(imgs[index].shape[1:], boxes, shapes[index][0]).round()
@@ -259,3 +259,70 @@ if __name__ == "__main__":
     else:
         args.data = f'data/{real_cmt}/{real_cmt}_seed{DATA_SEED}.data'
     main(args)
+
+    
+    comments = ['xilin_wdt']
+    test_real_data_folder = 'xilin_wdt'
+    hyp_cmt = 'hgiou1_1gpu_xilinratio_aughsv_{}iter_{}epc'.format(opt.iters, opt.epochs)
+    synfolder = 'real_WDT'
+
+ 
+    apN = 50
+    import pandas as pd
+    seeds = [1] # 0, 1, 2
+    far_thres = 3
+    for cmt in comments:
+        df_pr_ap = pd.DataFrame(columns=["Train_data", "seed", "Seen", "NT", "AP{}".format(apN), "Precision", "Recall" , "F1"]) # 
+        for ix, sd in enumerate(seeds):
+            opt.name = synfolder
+
+            ''' for specified model id '''
+            opt.data = 'data_wdt/{}/{}_real_test.data'.format(test_real_data_folder, test_real_data_folder)
+            # opt.data = 'data_wdt/{}/{}_seed{}.data'.format(test_real_data_folder, test_real_data_folder, opt.dataseed)
+            
+            opt.result_dir = opt.result_dir.format(synfolder, cmt, opt.dataseed, 'test_on_{}_{}_sd{}'.format(test_real_data_folder, hyp_cmt, sd))
+            
+            if not os.path.exists(opt.result_dir):
+                os.makedirs(opt.result_dir)
+            
+            print(os.path.join(opt.weights_dir.format(synfolder, cmt, opt.dataseed, '*_{}_val_real_sd{}'.format(hyp_cmt, sd), 'best_*seed{}.pt'.format(sd))))
+            print(glob.glob(os.path.join(opt.weights_dir.format(synfolder, cmt, opt.dataseed, '*_{}_val_real_sd{}'.format(hyp_cmt, sd), 'best_*seed{}.pt'.format(sd)))))
+
+            all_weights = glob.glob(os.path.join(opt.weights_dir.format(synfolder, cmt, opt.dataseed, '*_{}_val_real_sd{}'.format(hyp_cmt, sd)), 'best_*seed{}.pt'.format(sd)))
+            all_weights.sort()
+            opt.weights = all_weights[-1]
+
+            print(opt.weights)
+            print(opt.data)
+            seen, nt, mp, mr, mapv, mf1 = test(opt.cfg,
+                                                opt.data,
+                                                opt.weights,
+                                                opt.batch_size,
+                                                opt.img_size,
+                                                opt.conf_thres,
+                                                opt.nms_iou_thres,
+                                                opt.save_json, opt=opt)
+
+            df_pr_ap.at[ix, "Train_data"] = cmt
+            df_pr_ap.at[ix, "seed"] = sd
+            df_pr_ap.at[ix, "Seen"] = seen
+            df_pr_ap.at[ix, "NT"] = nt
+            df_pr_ap.at[ix, "AP{}".format(apN)] = mapv    
+            df_pr_ap.at[ix, "Precision"] = mp
+            df_pr_ap.at[ix, "Recall"] = mr
+            df_pr_ap.at[ix, "F1"] = mf1
+        row_mean = df_pr_ap.iloc[:, 4:8].mean(axis=0)  
+        print(row_mean)  
+        df_pr_ap.at[ix+1, "AP{}".format(apN)] = row_mean[f'AP{apN}']    
+        df_pr_ap.at[ix+1, "Precision"] = row_mean['Precision']
+        df_pr_ap.at[ix+1, "Recall"] = row_mean['Recall']
+        df_pr_ap.at[ix+1, "F1"] = row_mean['F1']
+        # df_pr_ap.iloc[ix+1, 4:7] = row_mean
+        df_pr_ap.at[ix+1, "Train_data"] = cmt
+        df_pr_ap.at[ix+1, "seed"] = 'avg'
+        df_pr_ap.at[ix+1, "Seen"] = seen
+        df_pr_ap.at[ix+1, "NT"] = nt    
+        csv_name =  f"{test_real_data_folder}_pr_all_seeds.xlsx"
+        mode = 'w'
+        with pd.ExcelWriter(os.path.join(opt.result_dir, csv_name), mode=mode) as writer:
+            df_pr_ap.to_excel(writer, sheet_name=f'{test_real_data_folder}', index=False) 

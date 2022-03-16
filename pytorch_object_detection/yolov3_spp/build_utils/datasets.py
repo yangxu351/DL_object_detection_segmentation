@@ -68,7 +68,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             with open(path, 'r') as f:
                 self.img_files = [x.replace('/', os.sep) for x in f.read().splitlines()  # os-agnostic
                                 if os.path.splitext(x)[-1].lower() in img_formats]
-            img_names = [os.path.basename(f) for f in self.img_files[:4]]
+            img_names = [os.path.basename(f) for f in self.img_files]
             #print('path', path)
             #print('img_names', img_names)
             
@@ -81,7 +81,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
             # 检查每张图片后缀格式是否在支持的列表中，保存支持的图像路径
             # img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.dng']
-            self.img_files = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
+            # self.img_files = [x for x in f if os.path.splitext(x)[-1].lower() in img_formats]
         except Exception as e:
             raise FileNotFoundError("Error loading data from {}. {}".format(path, e))
 
@@ -318,18 +318,18 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels[:, 2] = ratio[1] * h * (x[:, 2] - x[:, 4] / 2) + pad[1]  # pad height
                 labels[:, 3] = ratio[0] * w * (x[:, 1] + x[:, 3] / 2) + pad[0]
                 labels[:, 4] = ratio[1] * h * (x[:, 2] + x[:, 4] / 2) + pad[1]
+        ###### fixme remove affine and hsv augmentation
+        # if self.augment:
+        #     # Augment imagespace
+        #     if not self.mosaic:
+        #         img, labels = random_affine(img, labels,
+        #                                     degrees=hyp["degrees"],
+        #                                     translate=hyp["translate"],
+        #                                     scale=hyp["scale"],
+        #                                     shear=hyp["shear"])
 
-        if self.augment:
-            # Augment imagespace
-            if not self.mosaic:
-                img, labels = random_affine(img, labels,
-                                            degrees=hyp["degrees"],
-                                            translate=hyp["translate"],
-                                            scale=hyp["scale"],
-                                            shear=hyp["shear"])
-
-            # Augment colorspace
-            augment_hsv(img, h_gain=hyp["hsv_h"], s_gain=hyp["hsv_s"], v_gain=hyp["hsv_v"])
+        #     # Augment colorspace
+        #     augment_hsv(img, h_gain=hyp["hsv_h"], s_gain=hyp["hsv_s"], v_gain=hyp["hsv_v"])
 
         nL = len(labels)  # number of labels
         if nL:
