@@ -120,7 +120,7 @@ def main(parser_data, dir_args, val_all=False):
 
     VOC_root = parser_data.data_path
     # check voc root
-    if os.path.exists(os.path.join(VOC_root, "VOCdevkit")) is False:
+    if os.path.exists(os.path.join(VOC_root)) is False:
         raise FileNotFoundError("VOCdevkit dose not in path:'{}'.".format(VOC_root))
 
     # 注意这里的collate_fn是自定义的，因为读取的数据包括image和targets，不能直接使用默认的方法合成batch
@@ -193,7 +193,7 @@ def main(parser_data, dir_args, val_all=False):
 
     # img-anns dict    
     val_anns = []
-    for ann in coco_eval.cocoDt['anns'].keys():
+    for ann in coco_eval.cocoDt.anns.values():
         val_anns.append(ann)
 
     # save img-anns dict
@@ -216,15 +216,23 @@ def main(parser_data, dir_args, val_all=False):
 
 if __name__ == "__main__":
     import argparse
-    from parameters import BASE_DIR, DATA_SEED
+    from parameters import BASE_DIR#, DATA_SEED
     from syn_real_dir import get_dir_arg
     
     val_all = True     # validate on both real train and real val set
     # val_all = False  # only for validation set
-    # real_cmt = 'xilin_wdt'
-    real_cmt = 'DJI_wdt'
-    
-    folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211014_0137'       #0.4500(val) 0.3791(all) for xilin,  0.2050 for DJI
+    real_cmt = 'xilin_wdt'
+    # real_cmt = 'DJI_wdt'
+    # DATA_SEED = 0
+    # folder_name = 'lr0.05_bs8_20epochs_20211016_0107'       # 0.2735(all) for xilin,  0.2575 for DJI
+    ''' with model seed0'''
+    DATA_SEED = 0
+    folder_name = 'lr0.05_bs8_20epochs_modelseed0_20211029_2142'           #  0.2744(all) for xilin
+    # DATA_SEED = 1
+    # folder_name = 'lr0.05_bs8_20epochs_modelseed0_20211029_0826'         # 0.1911(all) for xilin
+    # DATA_SEED = 2
+    # folder_name = 'lr0.05_bs8_20epochs_modelseed0_20211029_1114'         # 0.2190(all) for xilin
+
     epc = 19
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = False
@@ -235,7 +243,7 @@ if __name__ == "__main__":
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda:0', help='device')
+    parser.add_argument('--device', default='cuda:3', help='device')
 
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
@@ -243,7 +251,7 @@ if __name__ == "__main__":
     parser.add_argument('--num-classes', type=int, default=1, help='number of classes')
 
     # 数据集的根目录(VOCdevkit)
-    parser.add_argument('--data-path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
+    parser.add_argument('--data_path', default=f'./real_syn_wdt_vockit/{real_cmt}', help='dataset root')
     parser.add_argument("--real_base_dir", type=str,default=f'{BASE_DIR}/data/wind_turbine', help="base path of synthetic data")
     parser.add_argument("--real_imgs_dir", type=str, default='{}/{}_crop', help="Path to folder containing real images")
     parser.add_argument("--real_voc_annos_dir", type=str, default='{}/{}_crop_label_xml_annos', help="Path to folder containing real annos of yolo format")
