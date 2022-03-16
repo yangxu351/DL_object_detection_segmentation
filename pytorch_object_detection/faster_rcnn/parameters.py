@@ -3,31 +3,41 @@ BASE_DIR= '/data/users/yang' # Groot
 
 CMT = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
 DATA_SEED = 0
+DEVICE= 'cuda:3'
+# DATA_SEED = 1
+# DEVICE= 'cuda:3'
+# DATA_SEED = 2
+# DEVICE= 'cuda:2'
 
 train_syn = True
 EPOCHS = 20 # 20
 BATCH_SIZE = 8
 LEARNING_RATE = 0.05 
+
+MODEL_SEED = 0
 ### with pixel attention branch, 
 WITH_PA = False # True False,  Pixel attention
 ### with FPN Mask multiply
-WITH_FPN_MASK = False # True False,  
+WITH_FPN_MASK = True # True False,  
 ### with RPN Mask multiply
-WITH_RPN_MASK = True # True False
+WITH_RPN_MASK = False # True False
  
 
 if WITH_RPN_MASK:
     # -1 represent random value in [0, 1)
     SOFT_VAL = -1
-    # -1 represent random value in [0, 0.5)
+    # -0.5 represent random value in [0, 0.5)
     # SOFT_VAL = -0.5 
-    # SOFT_VAL = 0.5 # 0.5 0.1 1 
+    # fixed value for background pixels
+    # SOFT_VAL = 0.5 
+    # SOFT_VAL = 0
+
 elif WITH_FPN_MASK:
     SOFT_VAL = -1 # 0.5 0.1 1 # -1 represent random value in [0, 1)
 else:
     SOFT_VAL = 1 # do not directly multiply masks
 
-DEVICE= 'cuda:2'
+
 
 ANNO_FORMAT = '.xml'
 REAL_IMG_FORMAT = '.jpg'
