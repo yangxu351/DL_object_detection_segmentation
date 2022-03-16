@@ -23,7 +23,7 @@ def create_model(num_classes, parser_data):
     backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d, returned_layers=[1,2,3,4],
                                      trainable_layers=3, withPA=parser_data.withPA, withFPNMask=parser_data.withFPNMask, soft_val=parser_data.soft_val)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, withRPNMask=parser_data.withRPNMask, soft_val=parser_data.soft_val, min_size=parser_data.input_size)
+    model = FasterRCNN(backbone=backbone, num_classes=91, withRPNMask=parser_data.withRPNMask, soft_val=parser_data.soft_val) #, min_size=parser_data.input_size
 
     # 载入预训练模型权重
     # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
@@ -54,10 +54,22 @@ def create_model(num_classes, parser_data):
 
     return model
 
+def init_seeds(seed=0):
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    import torch.backends.cudnn as cudnn
+    # Remove randomness (may be slower on Tesla GPUs) # https://pytorch.org/docs/stable/notes/randomness.html
+    if seed == 0:
+        cudnn.deterministic = True
+        cudnn.benchmark = False
 
 def main(parser_data, dir_args, train_syn=True):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
+    
+    init_seeds(parser_data.model_seed)
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -256,6 +268,8 @@ if __name__ == "__main__":
     parser.add_argument('--device', default=DEVICE, help='device')
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
+    # 数据分割种子
+    parser.add_argument('--model_seed', default=MODEL_SEED, type=int, help='MODEL seed')
     # 学习率
     parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
     # 检测目标类别数(不包含背景)
@@ -310,8 +324,15 @@ if __name__ == "__main__":
         folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_{time_marker}' # FPN Pixel attention mask
     elif args.withRPNMask: 
         ################### soft_msk[msk==1] = 1
-        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}' # RPN mask 
-        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}'
+        if args.soft_val == -0.5:
+            # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_halfmax_{time_marker}'
+            folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_halfmax_modelseed{args.model_seed}_{time_marker}'
+        else:
+            # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}' 
+            
+            folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_modelseed{args.model_seed}_{time_marker}' 
+
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}'
          # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_halfmax_{time_marker}'
         ################### soft_msk[msk!=0] = 1
         # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_nonzero_{time_marker}' 
@@ -319,8 +340,9 @@ if __name__ == "__main__":
         
     else:
         # FPN Pixel attention mask
-        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
-        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_modelseed{args.model_seed}_{time_marker}' 
+        #folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
         
       
     # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_btversky_seg{args.withPA}_{time_marker}'
