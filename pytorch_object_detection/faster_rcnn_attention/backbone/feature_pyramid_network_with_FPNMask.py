@@ -20,8 +20,10 @@ class Attention(nn.Module):
             nn.Conv2d(in_channels, inter_channels, 3, padding=1, bias=False),
             nn.BatchNorm2d(inter_channels),
             nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Conv2d(inter_channels, out_channels, 1)
+            # nn.Dropout(0.1),
+            nn.Conv2d(inter_channels, out_channels, 1),
+            nn.BatchNorm2d(inter_channels),
+            nn.ReLU(),
         )
     def forward(self,x, idx=0):
         x = self.block(x)
@@ -161,15 +163,18 @@ class FeaturePyramidNetworkwithFPNMask(nn.Module):
             feat_shape = inner_lateral.shape[-2:]
             inner_top_down = F.interpolate(last_inner, size=feat_shape, mode="nearest")
             last_inner = inner_lateral + inner_top_down
-            if idx == 1: # layer2 100
+            if idx == 1 or idx == 0: # layer2 100
                 msk = F.interpolate(masks, size=feat_shape, mode="nearest")
-                msk[msk==0] = self.soft_val 
+                if self.soft_val == -1:
+                    soft_msk = torch.rand_like(msk)
+                else:
+                    soft_msk = torch.ones_like(msk)*self.soft_val
+
+                soft_msk[msk==1] = 1
+                msk=soft_msk
+
                 mask_layer = msk*last_inner
-                results.insert(0, self.get_result_from_layer_blocks(mask_layer, idx))
-            elif idx == 0 : # layer1 200
-                msk = F.interpolate(masks, size=feat_shape, mode="nearest")
-                msk[msk==0] = self.soft_val
-                mask_layer = msk*last_inner
+                
                 results.insert(0, self.get_result_from_layer_blocks(mask_layer, idx))
             else:
                 results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))

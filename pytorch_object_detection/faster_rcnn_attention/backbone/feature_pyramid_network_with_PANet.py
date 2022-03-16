@@ -23,7 +23,9 @@ class Attention(nn.Module):
             nn.BatchNorm2d(inter_channels),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Conv2d(inter_channels, out_channels, 1)
+            nn.Conv2d(inter_channels, out_channels, 1),
+            nn.BatchNorm2d(out_channels),
+            # nn.ReLU()
         )
         # self.attention_conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(1, 1), stride=1)
         # self.bn_one = nn.BatchNorm2d(out_channels)

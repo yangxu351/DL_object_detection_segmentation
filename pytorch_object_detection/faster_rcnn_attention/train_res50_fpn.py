@@ -23,7 +23,7 @@ def create_model(num_classes, parser_data):
     backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d, returned_layers=[1,2,3,4],
                                      trainable_layers=3, withPA=parser_data.withPA, withFPNMask=parser_data.withFPNMask, soft_val=parser_data.soft_val)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, withRPNMask=parser_data.withRPNMask, soft_val=parser_data.soft_val, min_size=parser_data.input_size)
+    model = FasterRCNN(backbone=backbone, num_classes=91, withRPNMask=parser_data.withRPNMask, soft_val=parser_data.soft_val) #, min_size=parser_data.input_size
 
     # 载入预训练模型权重
     # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
@@ -54,10 +54,22 @@ def create_model(num_classes, parser_data):
 
     return model
 
+def init_seeds(seed=0):
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+    import torch.backends.cudnn as cudnn
+    torch.manual_seed(seed)
+    # Remove randomness (may be slower on Tesla GPUs) # https://pytorch.org/docs/stable/notes/randomness.html
+    if seed == 0:
+        cudnn.deterministic = True
+        cudnn.benchmark = False
 
 def main(parser_data, dir_args, train_syn=True):
     device = torch.device(parser_data.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
+    
+    init_seeds(parser_data.model_seed)
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -256,8 +268,12 @@ if __name__ == "__main__":
     parser.add_argument('--device', default=DEVICE, help='device')
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
+    # model种子
+    parser.add_argument('--model_seed', default=MODEL_SEED, type=int, help='MODEL seed')
     # 学习率
     parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
+    # 学习率 decay
+    parser.add_argument('--decay', default=LEARNING_DECAY, type=float, help='learning rate DECAY')
     # 检测目标类别数(不包含背景)
     parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
     # 训练数据集的根目录(VOCdevkit)scr
@@ -307,7 +323,9 @@ if __name__ == "__main__":
         else:
             folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_FPN_Mask{args.withFPNMask}_softval{args.soft_val}_{time_marker}' # FPN mask
     elif args.withPA:
-        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_{time_marker}' # FPN Pixel attention mask
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_{time_marker}' # FPN Pixel attention mask
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_modelseed{args.model_seed}_{time_marker}' 
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_PA{args.withPA}_modelseed{args.model_seed}_focalloss_{time_marker}' 
     elif args.withRPNMask: 
         ################### soft_msk[msk==1] = 1
         # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_{time_marker}' # RPN mask 

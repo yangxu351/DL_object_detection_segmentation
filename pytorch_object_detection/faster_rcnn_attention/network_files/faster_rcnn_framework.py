@@ -35,7 +35,7 @@ class FasterRCNNBase(nn.Module):
         self.rpn = rpn
         self.roi_heads = roi_heads
         self.mask_head = mask_head
-        self.withRPNMask = withRPNMask,
+        self.withRPNMask = withRPNMask
         # used only on torchscript mode
         self._has_warned = False
 
@@ -95,7 +95,7 @@ class FasterRCNNBase(nn.Module):
         losses = {}
         
         # 将特征层mask 以及真实的mask 传入mask_head
-        if self.backbone.withPA: # masks is not None and 
+        if self.backbone.withPA and masks is not None: 
             mask_losses = self.mask_head(masks, mask_features)
             losses.update(mask_losses)
 
@@ -382,4 +382,4 @@ class FasterRCNN(FasterRCNNBase):
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
         
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head, withRPNMask) 
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head=mask_head, withRPNMask=withRPNMask)  #

@@ -20,7 +20,7 @@ def _onnx_get_num_anchors_and_pre_nms_top_n(ob, orig_pre_nms_top_n):
         (torch.tensor([orig_pre_nms_top_n], dtype=num_anchors.dtype),
          num_anchors), 0))
 
-    return num_anchors, pre_nms_top_n
+    return num_anchors, pre_nms_top_nd
 
 
 class AnchorsGenerator(nn.Module):
@@ -295,7 +295,13 @@ class RPNMaskHead(nn.Module):
                     #  soft_msk[msk!=0] = 1
                     msk=soft_msk
                 else:
-                    msk[msk==0] = self.soft_val
+                    # msk[msk==0] = self.soft_val
+                    soft_msk = torch.ones_like(msk)*self.soft_val
+                    ## fixme
+                    soft_msk[msk==1] = 1
+                    ### fixme softval-1_nonzero
+                    #  soft_msk[msk!=0] = 1
+                    msk=soft_msk
 
                 rl_feat = F.relu(self.conv(feature))
                 t = rl_feat*msk

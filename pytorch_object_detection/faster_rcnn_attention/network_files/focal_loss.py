@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import pdb
 
 class FocalLoss_v2(nn.Module):
-    def __init__(self, num_class, gamma=2, alpha=None):
+    def __init__(self, num_class=1, gamma=2, alpha=None):
         '''
         alpha: tensor of shape (C)
         '''
@@ -34,14 +34,11 @@ class FocalLoss_v2(nn.Module):
         if logit.dim() > 2:
             logit = logit.view(logit.size(0), logit.size(1), -1)#(N,C,d=d1*d2*d3)
             logit = logit.permute(0,2,1)#(N,d,C)
-            logit = logit.view(-1, self.num_class) #(N*d,C)
+            logit = logit.view(-1) #(N*d*C)
         target = target.view(-1) #(N*H*W)
-        #alpha  = self.alpha.view(1, self.num_class) #(1,C)
-        alpha = self.alpha[target.cpu().long()] #(N*H*W)
-
-        logpt = - F.cross_entropy(logit, target, reduction='none')
+        logpt = - F.binary_cross_entropy_with_logits(logit, target)
         pt    = torch.exp(logpt)
-        focal_loss = -(alpha * (1 - pt) ** self.gamma) * logpt
+        focal_loss = -(self.alpha * (1 - pt) ** self.gamma) * logpt
 
         return focal_loss.mean()
         

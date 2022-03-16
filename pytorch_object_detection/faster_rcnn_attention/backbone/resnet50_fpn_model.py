@@ -223,26 +223,14 @@ class BackboneWithFPN(nn.Module):
                 out_channels=out_channels,
                 extra_blocks=extra_blocks,
             )
-        if withFPNMask:
+        elif withFPNMask:
             self.fpnwithFPNMask = FeaturePyramidNetworkwithFPNMask(
                 in_channels_list=in_channels_list,
                 out_channels=out_channels,
                 extra_blocks=extra_blocks,
                 soft_val = soft_val,
             )
-
-        # self.fpnWithPA = FeaturePyramidNetworkwithPA(
-        #         in_channels_list=in_channels_list,
-        #         out_channels=out_channels,
-        #         extra_blocks=extra_blocks,
-        #     )
-        # self.fpnwithFPNMask = FeaturePyramidNetworkwithFPNMask(
-        #         in_channels_list=in_channels_list,
-        #         out_channels=out_channels,
-        #         extra_blocks=extra_blocks,
-        #         soft_val = soft_val,
-        # )
-
+        # else:
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
             out_channels=out_channels,
@@ -253,7 +241,7 @@ class BackboneWithFPN(nn.Module):
         self.withPA = withPA
         self.withFPNMask= withFPNMask
 
-    def forward(self, x, masks):
+    def forward(self, x, masks=None):
         x = self.body(x) # top-down features of each level (returned layers)
         mask_x=None
         if masks is not None:

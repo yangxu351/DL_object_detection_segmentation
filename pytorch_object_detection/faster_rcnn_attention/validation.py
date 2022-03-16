@@ -15,7 +15,7 @@ from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
-from parameters import BASE_DIR, DATA_SEED
+from parameters import BASE_DIR, DATA_SEED, WITH_PA
 import json 
 
 class MyEncoder(json.JSONEncoder):
@@ -140,7 +140,7 @@ def main(parser_data, val_all=False):
 
     # create model num_classes equal background + 20 classes
     # 注意，这里的norm_layer要和训练脚本中保持一致
-    backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d)
+    backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d, withPA=parser_data.withPA)
     model = FasterRCNN(backbone=backbone, num_classes=parser_data.num_classes + 1)
 
     # 载入你自己训练好的模型权重
@@ -225,31 +225,9 @@ if __name__ == "__main__":
     real_cmt = 'xilin_wdt'
     # real_cmt = 'DJI_wdt'
     
-    # folder_name = 'lr0.05_bs8_20epochs_MaskFalse_softval1.0_20211012_0905'     #  0.338(val) 0.2982(all) for xilin, 0.261 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211014_0018'         #  0.3452(val) 0.2941(all) for xilin, 0.3463 for DJI. cuda2 5.856 hours.
-    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211015_2121'            #  0.30116 (all) for xilin, 0.2572 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_minsize608_MASKFalse_softval1_20211020_2213'     #  0.26516 (all) for xilin, 0.26145 for DJI
-    
-    # epc = 19
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_nonzero_20211019_1007'    # 0.3034 (all) for xilin,  0.2829 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_20211016_2238'         # 0.2995 (all) for xilin,  0.27539 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_MaskTrue_softval0.5_20211012_2050'          #  0.1827 for xilin, 0.2109 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_20211013_0826'      #  0.3345(all) for xilin, 0.2894 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211014_0137'       #   0.3791(all) for xilin,  0.2050 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211015_2123'        #  0.383 (all) for xilin, 0.2095 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_nonzero_20211019_1850'  #  0.3568 (all) for xilin, 0.1790 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval-0.5_halfmax_20211020_2210' # 0.2725 (all) for xilin, 0.31457 for DJI
-    
-    ############## fixed soft pixel value
-    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval0_20211021_1128' # 0.2637 for xilin, 
-    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval0.5_20211021_1134' # 0.2795 for xilin, 
-    ############## randomly sample from [0, 0.5), [0, 1) as soft pixel values
-    folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval-0.5_halfmax_20211021_0404' #0.2661 for xilin, 
-    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval-1_20211021_0715' # 0.3592 for xilin
     epc = 19
-    # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.1_20211011_2325'
-    # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.5_20211011_2326'        # 0.132 for xilin,  0.2894 for DJI
-    # epc = 49
+    # folder_name = 'lr0.05_bs8_20epochs_PATrue_modelseed0_focalloss_20211027_1017'  # 0.3258 for xilin,
+    folder_name = 'lr0.0004_bs8_20epochs_PATrue_modelseed0_focalloss_20211027_2136'
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = False
     parser = argparse.ArgumentParser(
@@ -276,6 +254,8 @@ if __name__ == "__main__":
 
     # batch size
     parser.add_argument('--batch_size', default=1, type=int, metavar='N', help='batch size when validation.')
+    # 是否 fpn_withPA
+    parser.add_argument('--withPA', default=WITH_PA, type=bool, help='True when training withPA. which will compute mask loss in PA branch')
 
     args = parser.parse_args()
     
