@@ -50,6 +50,7 @@ def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres
     prd_lbl = json.load(open(res_list)) # xtlytlwh
         
     df_name_file = pd.read_csv(real_file_names, header=None).to_numpy()
+    gt_cnt = 0
     for i, name in enumerate(df_name_file[:,0]):    
         img_file = os.path.join(real_args.real_imgs_dir, name + REAL_IMG_FORMAT)
         img = cv2.imread(img_file)
@@ -59,7 +60,7 @@ def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres
         xml = etree.fromstring(xml_str)
         data = parse_xml_to_dict(xml)["annotation"]
         # img_path = os.path.join(real_args.real_imgs_dir, data["filename"])
-
+        
         gt_boxes = []
         assert "object" in data, "{} lack of object information.".format(xml_path)
         for obj in data["object"]:
@@ -69,7 +70,11 @@ def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres
             ymax = int(obj["bndbox"]["ymax"])
             
             gt_boxes.append([xmin, ymin, xmax, ymax])
-
+            
+        print('gt_boxes', len(gt_boxes))
+        gt_cnt += len(gt_boxes)
+        
+    # print('gt cnt', gt_cnt)
         for px, p in enumerate(prd_lbl):
             if p['image_id'] != i or p['score'] < score_thres:
                 continue
@@ -79,7 +84,7 @@ def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres
             
             for g in gt_boxes:
                 iou = coord_iou_sigle(p_bbx, g)
-                
+                img = cv2.rectangle(img, (g[0], g[1]), (g[2], g[3]),  (255, 255, 0), 1) # (255, 255, 0) (139, 101, 8)
                 p_bbx = [int(round(p)) for p in p_bbx]
                 if iou >= iou_thres:
                     print('iou', iou)
@@ -88,8 +93,8 @@ def check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres=0.01, iou_thres
                     text = 'conf:{:.2f}'.format(p['score']) 
                     cv2.putText(img, text=text, org=(p_bbx[0] + 10, p_bbx[1] + 10), # [pr_bx[0], pr[-1]]
                                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale=0.5, thickness=1, lineType=cv2.LINE_AA, color=(134, 0, 0))
-                img = cv2.rectangle(img, (g[0], g[1]), (g[2], g[3]), (255, 255, 0), 2)
+                                fontScale=0.5, thickness=1, lineType=cv2.LINE_AA, color=pred_txt_color) # (134, 0, 0)
+                
             cv2.imwrite(os.path.join(iou_check_save_dir, name+REAL_IMG_FORMAT), img)
 
 
@@ -109,9 +114,13 @@ if __name__ == '__main__':
     
     
     # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211015_2121'
+    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_modelseed0_20211026_0708' 
     # pred_box_color = (114,128,250) # salmon
-    folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211015_2123'
+    # pred_txt_color = (0, 69, 255)
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211015_2123'
+    folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_modelseed0_20211025_2111' 
     pred_box_color = (0,255,255) # yellow
+    pred_txt_color = (0, 128, 255)
     check_prd_gt_iou(real_cmt, syn_cmt, folder_name, score_thres, iou_thres, pred_box_color)
 
 
