@@ -57,7 +57,6 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, withPA=False,
             else:
                 mask_mloss=None
 
-
             if not math.isfinite(loss_value):  # 当计算的损失为无穷大时停止训练
                 print("Loss is {}, stopping training".format(loss_value))
                 print(loss_dict_reduced)
