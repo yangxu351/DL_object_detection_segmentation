@@ -15,7 +15,7 @@ from network_files import FasterRCNN
 from backbone import resnet50_fpn_backbone
 from my_dataset import VOCDataSet
 from train_utils import get_coco_api_from_dataset, CocoEvaluator
-from parameters import BASE_DIR, DATA_SEED
+from parameters import BASE_DIR, DATA_SEED, WITH_FPN_MASK, WITH_RPN_MASK
 import json 
 
 class MyEncoder(json.JSONEncoder):
@@ -140,14 +140,24 @@ def main(parser_data, val_all=False):
 
     # create model num_classes equal background + 20 classes
     # 注意，这里的norm_layer要和训练脚本中保持一致
-    backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d)
-    model = FasterRCNN(backbone=backbone, num_classes=parser_data.num_classes + 1)
+    
+    if WITH_RPN_MASK:
+        ''' RPN*mask '''
+        backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d)
+        model = FasterRCNN(backbone=backbone, num_classes=parser_data.num_classes + 1, withRPNMask=True)
+    elif WITH_FPN_MASK:
+        ''' FPN*mask '''
+        backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d, withFPNMask=True)
+        model = FasterRCNN(backbone=backbone, num_classes=parser_data.num_classes + 1)
+    else:
+        backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d)
+        model = FasterRCNN(backbone=backbone, num_classes=parser_data.num_classes + 1)
 
     # 载入你自己训练好的模型权重
     weights_path = parser_data.weights
     assert os.path.exists(weights_path), "not found {} file.".format(weights_path)
     model.load_state_dict(torch.load(weights_path, map_location=device)['model'])
-    # print(model)
+    
 
     model.to(device)
 
@@ -227,23 +237,95 @@ if __name__ == "__main__":
     
     # folder_name = 'lr0.05_bs8_20epochs_MaskFalse_softval1.0_20211012_0905'     #  0.338(val) 0.2982(all) for xilin, 0.261 for DJI
     # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211014_0018'         #  0.3452(val) 0.2941(all) for xilin, 0.3463 for DJI. cuda2 5.856 hours.
-    folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211015_2121'            #  0.30116 (all) for xilin, 0.2572 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_20211015_2121'            #  0.30116 (all) for xilin, 0.2572 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_minsize608_MASKFalse_softval1_20211020_2213'     #  0.26516 (all) for xilin, 0.26145 for DJI
+    
     # epc = 19
-    # folder_name = 'lr0.05_bs8_20epochs_MaskTrue_softval0.5_20211012_2050'        # 0.1827 for xilin, 0.2109 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_20211013_0826'      # 0.4236(val) 0.3345(all) for xilin, 0.2894 for DJI
-    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211014_0137'       #0.4500(val) 0.3791(all) for xilin,  0.2050 for DJI
+    ############## fixed soft pixel value
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_nonzero_20211019_1007'    # 0.3034 (all) for xilin,  0.2829 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_20211016_2238'         # 0.2995 (all) for xilin,  0.27539 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_MaskTrue_softval0.5_20211012_2050'          #  0.1827 for xilin, 0.2109 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_20211013_0826'      #  0.3345(all) for xilin, 0.2894 for DJI
+    ############## randomly sample from [0, 0.5), [0, 1) as soft pixel values
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211014_0137'       #   0.3791(all) for xilin,  0.2050 for DJI
     # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211015_2123'        #  0.383 (all) for xilin, 0.2095 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_nonzero_20211019_1850'  #  0.3568 (all) for xilin, 0.1790 for DJI
+    
+    
+    #################################### minsize=800
+    ############## randomly sample from [0, 0.5), [0, 1) as soft pixel values
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-0.5_halfmax_20211025_0908'  # 0.30079 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_20211025_0900'  # 0.27909 (all) for xilin
+    ############## fixed soft pixel value
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_20211025_0916' # 0.3277 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_20211025_0913' # 0.3200 (all) for xilin
+    # epc = 19
+
+    '''
+        RPN*mask
+        3 different dataseeds [0, 1, 2]
+        modelseed = 0
+    '''
     epc = 19
+    ################################### minisize=800 modelseed=0
+    # DATA_SEED = 0
+    ############## randomly sample from [0, 0.5), [0, 1) 
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-0.5_halfmax_modelseed0_20211025_2114' # 0.3283 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_modelseed0_20211025_2111'      # 0.4034  (all) for xilin
+    ############## fixed soft pixel value
+    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_modelseed0_20211026_0708'             # 0.2928 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_modelseed0_20211025_2112'         # 0.2980 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_modelseed0_20211026_0237'         # 0.2866 (all) for xilin
+    
+    ############### dataseed1
+    # DATA_SEED = 1
+    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_modelseed0_20211028_0858'           # 0.3411  (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_modelseed0_20211028_0855'          # 0.3197  (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_modelseed0_20211028_2114'         # 0.3548 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-0.5_halfmax_modelseed0_20211028_0854'    # 0.3218 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_modelseed0_20211028_0854'            # 0.38975 (all) for xilin
+    
+    ############### dataseed2
+    # DATA_SEED = 2
+    # folder_name = 'lr0.05_bs8_20epochs_MASKFalse_softval1_modelseed0_20211028_2135'          # 0.3254 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0_modelseed0_20211028_2136'      # 0.3145 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval0.5_modelseed0_20211028_2134'      # 0.3216 (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-0.5_halfmax_modelseed0_20211029_0231' # 0.3062  (all) for xilin
+    # folder_name = 'lr0.05_bs8_20epochs_RPN_MaskTrue_softval-1_modelseed0_20211029_0231'             # 0.3592 (all) for xilin
+      
+    #################################### minsize=608
+    ############## fixed soft pixel value
+    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval0_20211021_1128' # 0.2637 for xilin, 
+    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval0.5_20211021_1134' # 0.2795 for xilin, 
+    ############## randomly sample from [0, 0.5), [0, 1) as soft pixel values
+    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval-0.5_halfmax_20211021_0404' #0.2661 for xilin, 
+    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval-0.5_halfmax_20211020_2210' # 0.2725 (all) for xilin, 0.31457 for DJI
+    # folder_name = 'lr0.05_bs8_20epochs_minsize608_RPN_MaskTrue_softval-1_20211021_0715' # 0.3592 for xilin
+    # epc = 19
+
     # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.1_20211011_2325'
     # folder_name = 'lr0.05_bs8_50epochs_MaskTrue_softval0.5_20211011_2326'        # 0.132 for xilin,  0.2894 for DJI
     # epc = 49
+    
+    ''' FPN*mask WITH_FPN_MASK=True avg=0.30273'''
+    ############### dataseed0 
+    DATA_SEED = 0
+    # folder_name = 'lr0.05_bs8_20epochs_FPN_MaskTrue_softval-1_20220304_2007' #  0.183 (all) for xilin
+    folder_name = 'lr0.05_bs8_20epochs_FPN_MaskTrue_softval-1_20220305_2123' #  0.2049  (all) for xilin
+    ############### dataseed1
+    # DATA_SEED = 1
+    # folder_name = 'lr0.05_bs8_20epochs_FPN_MaskTrue_softval-1_20220304_2006' #  0.3332 (all) for xilin
+    ############### dataseed2
+    # DATA_SEED = 2
+    # folder_name = 'lr0.05_bs8_20epochs_FPN_MaskTrue_softval-1_20220304_2004' # 0.3260 (all) for xilin
+
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = False
     parser = argparse.ArgumentParser(
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda:1', help='device')
+    parser.add_argument('--device', default='cuda:3', help='device')
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
     # 检测目标类别数
