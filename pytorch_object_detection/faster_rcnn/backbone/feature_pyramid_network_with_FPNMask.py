@@ -160,20 +160,46 @@ class FeaturePyramidNetworkwithFPNMask(nn.Module):
             inner_lateral = self.get_result_from_inner_blocks(x[idx], idx)
             feat_shape = inner_lateral.shape[-2:]
             inner_top_down = F.interpolate(last_inner, size=feat_shape, mode="nearest")
-            last_inner = inner_lateral + inner_top_down
-            if idx == 1: # layer2 100
-                msk = F.interpolate(masks, size=feat_shape, mode="nearest")
-                msk[msk==0] = self.soft_val 
-                mask_layer = msk*last_inner
-                results.insert(0, self.get_result_from_layer_blocks(mask_layer, idx))
-            elif idx == 0 : # layer1 200
-                msk = F.interpolate(masks, size=feat_shape, mode="nearest")
-                msk[msk==0] = self.soft_val
-                mask_layer = msk*last_inner
-                results.insert(0, self.get_result_from_layer_blocks(mask_layer, idx))
+            last_inner = inner_lateral + inner_top_down # 6
+
+            ''' FPN Inner*Mask!!!!!!!!!!!! ''' 
+            # if idx == 1 or idx == 0: # layer2 100
+            #     msk = F.interpolate(masks, size=feat_shape, mode="nearest")
+            #     if self.soft_val == -1:
+            #         soft_msk = torch.rand_like(msk)
+            #         soft_msk[msk==1] = 1
+            #     elif self.soft_val == -0.5:
+            #         ### fixme softval-1_halfmax
+            #         soft_msk = torch.rand_like(msk)//2
+            #         soft_msk[msk==1] = 1
+            #     else:
+            #         soft_msk = torch.ones_like(msk)*self.soft_val
+                
+            #     last_inner = soft_msk*last_inner
+
+            #     results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
+            # else:
+            #     results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
+
+            ''' FPN Layer*Mask!!!!!!!!! '''
+            if idx == 1 or idx ==0: # layer2 100
+                last_layer = self.get_result_from_layer_blocks(last_inner, idx)
+                layer_feat_shape = last_layer.shape[-2:]
+                msk = F.interpolate(masks, size=layer_feat_shape, mode="nearest")
+                if self.soft_val == -1:
+                    soft_msk = torch.rand_like(msk)
+                    soft_msk[msk==1] = 1
+                elif self.soft_val == -0.5:
+                    ### fixme softval-1_halfmax
+                    soft_msk = torch.rand_like(msk)//2
+                    soft_msk[msk==1] = 1
+                else:
+                    soft_msk = torch.ones_like(msk)*self.soft_val
+                last_layer = soft_msk*last_layer
+                results.insert(0, last_layer)
             else:
                 results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
-            
+
         # 在layer4对应的预测特征层基础上生成预测特征矩阵5
         if self.extra_blocks is not None:
             results, names = self.extra_blocks(results, x, names)
@@ -181,4 +207,3 @@ class FeaturePyramidNetworkwithFPNMask(nn.Module):
         # make it back an OrderedDict
         out = OrderedDict([(k, v) for k, v in zip(names, results)])
         return out
-
