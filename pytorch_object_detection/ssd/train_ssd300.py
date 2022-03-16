@@ -41,6 +41,7 @@ def create_model(num_classes=21):
 def init_seeds(seed=0):
     import random
     random.seed(seed)
+    import numpy as np
     np.random.seed(seed)
     torch.manual_seed(seed)
     import torch.backends.cudnn as cudnn
@@ -211,54 +212,55 @@ def main(parser_data, dir_args, train_syn=True):
 if __name__ == '__main__':
     import argparse
     from parameters import *
+    for DATA_SEED in dataseeds:
+        cmt_seed = f'{CMT}_dataseed{DATA_SEED}'
+        parser = argparse.ArgumentParser(
+            description=__doc__)
 
-    cmt_seed = f'{CMT}_dataseed{DATA_SEED}'
-    parser = argparse.ArgumentParser(
-        description=__doc__)
+        # 训练设备类型
+        parser.add_argument('--device', default=DEVICE, help='device')
+        # 数据分割种子
+        parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
+        # 数据分割种子
+        parser.add_argument('--model-seed', default=MODEL_SEED, type=int, help='MODEL seed')
+        # 学习率
+        parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
+        # 检测目标类别数(不包含背景)
+        parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
+        # 训练数据集的根目录(VOCdevkit)scr
+        parser.add_argument('--data_path', default='./real_syn_wdt_vockit/{}', help='dataset')
+        # 权重文件保存地址
+        parser.add_argument('--weight_dir', default='./save_weights/{}/{}', help='path where to save weight')
+        # log文件保存地址
+        parser.add_argument('--log_dir', default='./save_logs/{}/{}', help='path where to save weight')
+        # ap pr figures文件保存地址
+        parser.add_argument('--fig_dir', default='./save_figures/{}/{}', help='path where to save figures')
+        # pr results 文件保存地址
+        parser.add_argument('--result_dir', default='./save_results/{}/{}', help='path where to save results')
+        # 若需要接着上次训练，则指定上次训练保存权重文件地址
+        parser.add_argument('--resume', default='', type=str, help='resume from checkpoint')
+        # 指定接着从哪个epoch数开始训练
+        parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
+        # 训练的总epoch数
+        parser.add_argument('--epochs', default=EPOCHS, type=int, metavar='N', help='number of total epochs to run')
+        # 训练的batch size
+        parser.add_argument('--batch_size', default=BATCH_SIZE, type=int, metavar='N', help='batch size when training.')
 
-    # 训练设备类型
-    parser.add_argument('--device', default=DEVICE, help='device')
-    # 数据分割种子
-    parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
-    # 数据分割种子
-    parser.add_argument('--model-seed', default=MODEL_SEED, type=int, help='MODEL seed')
-    # 学习率
-    parser.add_argument('--lr', default=LEARNING_RATE, type=float, help='learning rate')
-    # 检测目标类别数(不包含背景)
-    parser.add_argument('--num-classes', default=1, type=int, help='num_classes')
-    # 训练数据集的根目录(VOCdevkit)scr
-    parser.add_argument('--data_path', default='./real_syn_wdt_vockit/{}', help='dataset')
-    # 权重文件保存地址
-    parser.add_argument('--weight_dir', default='./save_weights/{}/{}', help='path where to save weight')
-    # log文件保存地址
-    parser.add_argument('--log_dir', default='./save_logs/{}/{}', help='path where to save weight')
-    # ap pr figures文件保存地址
-    parser.add_argument('--fig_dir', default='./save_figures/{}/{}', help='path where to save figures')
-    # pr results 文件保存地址
-    parser.add_argument('--result_dir', default='./save_results/{}/{}', help='path where to save results')
-    # 若需要接着上次训练，则指定上次训练保存权重文件地址
-    parser.add_argument('--resume', default='', type=str, help='resume from checkpoint')
-    # 指定接着从哪个epoch数开始训练
-    parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
-    # 训练的总epoch数
-    parser.add_argument('--epochs', default=EPOCHS, type=int, metavar='N', help='number of total epochs to run')
-    # 训练的batch size
-    parser.add_argument('--batch_size', default=BATCH_SIZE, type=int, metavar='N', help='batch size when training.')
-
-    args = parser.parse_args()
-    
-    args.data_path = args.data_path.format(CMT)
-    ####################-----------------fixme
-    time_marker = time.strftime('%Y%m%d_%H%M', time.localtime())
-    folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_{time_marker}'
-    args.weight_dir = args.weight_dir.format(cmt_seed, folder_name)
-    args.log_dir = args.log_dir.format(cmt_seed, folder_name)
-    args.fig_dir = args.fig_dir.format(cmt_seed, folder_name)
-    args.result_dir = args.result_dir.format(cmt_seed, folder_name)
-    from syn_real_dir import get_dir_arg
-    dir_args = get_dir_arg(CMT, syn=train_syn)
-    # 检查保存权重文件夹是否存在，不存在则创建
-    # if not os.path.exists(args.output_dir):
-    #     os.makedirs(args.output_dir)
-    print(args)
-    main(args, dir_args, train_syn)
+        args = parser.parse_args()
+        
+        args.data_path = args.data_path.format(CMT)
+        ####################-----------------fixme
+        time_marker = time.strftime('%Y%m%d_%H%M', time.localtime())
+        # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_{time_marker}'
+        folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_modelseed{args.model_seed}_{time_marker}'
+        args.weight_dir = args.weight_dir.format(cmt_seed, folder_name)
+        args.log_dir = args.log_dir.format(cmt_seed, folder_name)
+        args.fig_dir = args.fig_dir.format(cmt_seed, folder_name)
+        args.result_dir = args.result_dir.format(cmt_seed, folder_name)
+        from syn_real_dir import get_dir_arg
+        dir_args = get_dir_arg(CMT, syn=train_syn)
+        # 检查保存权重文件夹是否存在，不存在则创建
+        # if not os.path.exists(args.output_dir):
+        #     os.makedirs(args.output_dir)
+        print(args)
+        main(args, dir_args, train_syn)

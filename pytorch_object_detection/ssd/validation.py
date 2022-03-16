@@ -231,13 +231,23 @@ def main(parser_data):
 
 
 if __name__ == "__main__":
-    from parameters import DATA_SEED, BASE_DIR
+    from parameters import BASE_DIR#, DATA_SEED
 
     val_all = True     # validate on both real train and real val set
     # val_all = False  # only for validation set
     real_cmt = 'xilin_wdt'
     # real_cmt = 'DJI_wdt'
-    folder_name = ''
+    '''without initiating model seed'''
+    # DATA_SEED = 0
+    # folder_name = 'lr0.0005_bs8_20epochs_20211021_0724' # 0.313 for xilin,  0.2924 for DJI 
+    # folder_name = 'lr0.05_bs8_20epochs_20211021_0849' # 0.000132 for xilin, 
+    '''with initiating model seed 0'''
+    DATA_SEED = 0
+    folder_name = 'lr0.0005_bs8_20epochs_modelseed0_20211029_2210' # 0.2097 for xilin
+    # DATA_SEED = 1
+    # folder_name = 'lr0.0005_bs8_20epochs_modelseed0_20211029_0822' # 0.2537 for xilin
+    # DATA_SEED = 2
+    # folder_name = 'lr0.0005_bs8_20epochs_modelseed0_20211029_0924' # 0.2885 for xilin
     epc = 19
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     syn = False
@@ -246,7 +256,7 @@ if __name__ == "__main__":
         description=__doc__)
 
     # 使用设备类型
-    parser.add_argument('--device', default='cuda:3', help='device')
+    parser.add_argument('--device', default='cuda:2', help='device')
     # 数据分割种子
     parser.add_argument('--data-seed', default=DATA_SEED, type=int, help='data split seed')
     # 检测目标类别数
@@ -262,7 +272,7 @@ if __name__ == "__main__":
     parser.add_argument('--result_dir', default=f'./save_results/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}', help='path where to save results')
     
     # 训练好的权重文件
-    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}/resNetFpn-model-{epc}.pth', type=str, help='training weights')
+    parser.add_argument('--weights', default=f'./save_weights/{syn_cmt}_dataseed{DATA_SEED}/{folder_name}/ssd300-{epc}.pth', type=str, help='training weights')
 
     # batch size
     parser.add_argument('--batch_size', default=1, type=int, metavar='N',
