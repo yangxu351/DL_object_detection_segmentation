@@ -27,3 +27,7 @@ save_results/
 real_syn_wdt_vockit/syn_wdt*/
 data/syn_wdt*/
 */rus/*
+pytorch_object_detection/faster_rcnn/real_syn_wdt_vockit/*
+pytorch_object_detection/retinaNet/real_syn_wdt_vockit/*
+pytorch_object_detection/ssd/real_syn_wdt_vockit/*
+pytorch_object_detection/faster_rcnn_attention/real_syn_wdt_vockit/*
