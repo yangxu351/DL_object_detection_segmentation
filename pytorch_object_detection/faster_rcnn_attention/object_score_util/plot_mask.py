@@ -12,7 +12,7 @@ import numpy as np
 if __name__ == '__main__':
     IMG_FORMAT = '.jpg'
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    syn_args = get_dir_arg(syn_cmt, syn=True, workbase_data_dir='real_syn_wdt_vockit/')
+    syn_args = get_dir_arg(syn_cmt=syn_cmt, workbase_data_dir='real_syn_wdt_vockit/')
     soft_msk_dir = syn_args.syn_data_segs_dir + '_soft_masks'
     if not os.path.exists(soft_msk_dir):
         os.mkdir(soft_msk_dir)
