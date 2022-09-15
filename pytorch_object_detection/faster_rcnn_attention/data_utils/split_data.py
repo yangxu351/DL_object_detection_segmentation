@@ -61,13 +61,13 @@ def get_arg(cmt='syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40', syn=True, wo
 if __name__ == '__main__':
     data_seed = 0
     random.seed(data_seed)  # 设置随机种子，保证随机结果可复现
-    cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    syn = True
-    val_rate = 0.3
-     
-    # cmt = 'xilin_wdt'
-    # syn = False
+    # cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
+    # syn = True
     # val_rate = 0.3
+     
+    cmt = 'xilin_wdt'
+    syn = False
+    val_rate = 0.3
 
     # cmt = 'DJI_wdt'
     # syn = False

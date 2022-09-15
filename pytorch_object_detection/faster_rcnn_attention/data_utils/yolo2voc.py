@@ -114,13 +114,13 @@ if __name__ == '__main__':
     ################## synthetic data
     # cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
     # syn=True
-    # args = get_dir_arg(cmt, syn, workbase_data_dir)
+    # args = get_dir_arg(syn_cmt=cmt, workbase_data_dir=workbase_data_dir)
     # convert_yolo_to_xml(cmt, args, syn=True)
 
     ################## real data
     cmt = 'xilin_wdt'
     syn = False
-    args = get_dir_arg(cmt, syn, workbase_data_dir)
+    args = get_dir_arg(real_cmt=cmt, workbase_data_dir=workbase_data_dir)
     convert_yolo_to_xml(cmt, args, syn=syn)
 
     

@@ -164,6 +164,6 @@ def draw_bbx_on_rgb_images(args):
 if __name__=='__main__':
     # cmt = 'xilin_wdt'
     cmt = 'DJI_wdt'
-    args = get_dir_arg(cmt, syn=False)
+    args = get_dir_arg(real_cmt=cmt)
     # convert_label_string_to_int_to_xml(cmt)
     draw_bbx_on_rgb_images(args)
