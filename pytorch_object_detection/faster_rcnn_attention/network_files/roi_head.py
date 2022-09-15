@@ -376,13 +376,12 @@ class RoIHeads(torch.nn.Module):
             regression_targets = None
 
         # 将采集样本通过Multi-scale RoIAlign pooling层
-        # box_features_shape: [num_proposals, channel, height, width]
-        box_features = self.box_roi_pool(features, proposals, image_shapes)
+        # box_features_shape: [num_proposals, channel, height, width] 8*512=4096
+        box_features = self.box_roi_pool(features, proposals, image_shapes)# 4096, 256, 7, 7
 
         # 通过roi_pooling后的两层全连接层
         # box_features_shape: [num_proposals, representation_size]
-        box_features = self.box_head(box_features)
-
+        box_features = self.box_head(box_features)# 4096, 1024
         # 接着分别预测目标类别和边界框回归参数
         class_logits, box_regression = self.box_predictor(box_features)
 
