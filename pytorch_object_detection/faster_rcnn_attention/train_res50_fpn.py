@@ -349,7 +349,10 @@ if __name__ == "__main__":
     args.fig_dir = args.fig_dir.format(cmt_seed, folder_name)
     args.result_dir = args.result_dir.format(cmt_seed, folder_name)
     from syn_real_dir import get_dir_arg
-    dir_args = get_dir_arg(CMT, syn=train_syn)
+    if train_syn:
+        dir_args = get_dir_arg(syn_cmt=CMT)
+    else:
+        dir_args = get_dir_arg(real_cmt=CMT)
     # print(dir_args.syn_data_segs_dir)
     print(args)
     # 检查保存权重文件夹是否存在，不存在则创建
