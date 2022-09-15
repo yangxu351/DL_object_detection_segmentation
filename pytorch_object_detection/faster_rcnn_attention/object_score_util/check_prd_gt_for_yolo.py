@@ -73,10 +73,10 @@ def check_prd_gt_iou(data, cmt, hyp_cmt, score_thres=0.01, iou_thres=0.2):
 if __name__ == '__main__':
     
     syn_cmt = 'syn_wdt_rnd_sky_rnd_solar_rnd_cam_p3_shdw_step40'
-    syn_args = get_dir_arg(syn_cmt, syn=True, workbase_data_dir='real_syn_wdt_vockit/')
+    syn_args = get_dir_arg(syn_cmt=syn_cmt, workbase_data_dir='real_syn_wdt_vockit/')
     real_cmt = 'xilin_wdt'
     # real_cmt = 'DJI_wdt'
-    real_args = get_dir_arg(real_cmt, syn=False, workbase_data_dir='real_syn_wdt_vockit/')
+    real_args = get_dir_arg(real_cmt=real_cmt, workbase_data_dir='real_syn_wdt_vockit/')
 
     # cmt = 'xilin_wdt'
     # synfolder = 'real_WDT'
