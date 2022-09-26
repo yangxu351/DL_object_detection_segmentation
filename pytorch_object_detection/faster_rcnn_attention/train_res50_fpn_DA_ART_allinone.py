@@ -268,52 +268,14 @@ def main(parser_data, syn_dir_args, real_dir_args):
             # 混合精度训练上下文管理器，如果在CPU环境中不起任何作用
             with torch.cuda.amp.autocast(enabled=enable_amp):
                 # tag: yang changed
-                loss_dict, lc_source_results, gl_source_results = model(images_s, targets_s, masks_s, is_target=False)
-                if args.lc or args.gl:
-                    _, lc_target_results, gl_target_results = model(images_t, targets_t, is_target=True)
-                if args.lc:
-                    dloss_source_lc_list = []
-                    dloss_target_lc_list = []
-                    lc_keys = [k for k in lc_source_results.keys()]
-                    num = len(lc_keys)
-                    for ix in range(num):
-                        # local alignment loss
-                        lc_s = lc_source_results[lc_keys[ix]]
-                        dloss_lc_s = 0.5 * torch.mean(lc_s ** 2)
-                        # source adv loss
-                        dloss_source_lc_list.append(dloss_lc_s)
-
-                        # local alignment loss
-                        lc_t = lc_target_results[lc_keys[ix]]
-                        dloss_lc_t = 0.5 * torch.mean((1 - lc_t) ** 2)
-                        # target adv loss
-                        dloss_target_lc_list.append(dloss_lc_t)
-
-                    loss_dict['loss_lc_s'] = torch.mean(torch.stack(dloss_source_lc_list))*args.eta
-                    loss_dict['loss_lc_t'] = torch.mean(torch.stack(dloss_target_lc_list))*args.eta
-
-                if args.gl:
-                    dloss_source_gl_list = []
-                    dloss_target_gl_list = []
-                    gl_keys = [k for k in gl_source_results.keys()]
-                    num = len(gl_keys)
+                loss_pred_lc_source_dict = model(images_s, targets_s, masks_s, is_target=False, eta=args.eta)
+                # loss_dict, lc_source_results, gl_source_results = model(images_s, targets_s, masks_s, is_target=False)
+                # if args.lc or args.gl:
+                lc_target_loss = model(images_t, targets_t, is_target=True, eta=args.eta)
                 
-                    for ix in range(num):
-                        gl_s = gl_source_results[gl_keys[ix]]
-                        # domain label
-                        domain_s = Variable(torch.zeros(len(gl_s)).long().to(device))
-                        # global alignment loss
-                        dloss_gl_s = 0.5 * FL(gl_s, domain_s)
-                        dloss_source_gl_list.append(dloss_gl_s)
-
-                        # domain label
-                        gl_t = gl_target_results[gl_keys[ix]]
-                        domain_t = Variable(torch.ones(len(gl_t)).long().to(device))
-                        dloss_gl_t = 0.5 * FL(gl_t, domain_t)
-                        dloss_target_gl_list.append(dloss_gl_t)
-
-                    loss_dict['loss_gl_s'] = torch.mean(torch.stack(dloss_source_gl_list))*args.eta
-                    loss_dict['loss_gl_t'] = torch.mean(torch.stack(dloss_target_gl_list))*args.eta
+                # tag: merge loss of target and loss_pred_lc_source_dict
+                loss_dict = dict(loss_pred_lc_source_dict)
+                loss_dict.update(lc_target_loss)
 
                 losses = sum(loss for loss in loss_dict.values())
                 # reduce losses over all GPUs for logging purpose
@@ -474,7 +436,7 @@ if __name__ == "__main__":
     parser.add_argument('--withFPNMask', default=WITH_FPN_MASK, type=bool, help='True when training withMask at FPN. directly multiply the mask with layer output')
     # 是否 rpn_withMask
     parser.add_argument('--withRPNMask', default=WITH_RPN_MASK, type=bool, help='True when training withMask at RPN. directly multiply the mask with layer output')
-    # fpn_withMask  or rpn_withMask
+    # soft value
     parser.add_argument('--soft_val', default=SOFT_VAL, type=float, help='0.5 when training withMask, mask[mask==0] == soft_val')
     # 是否 fpn_withPA
     parser.add_argument('--withPA', default=WITH_PA, type=bool, help='True when training withPA. which will compute mask loss in PA branch')
@@ -517,13 +479,16 @@ if __name__ == "__main__":
         # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_nonzero_{time_marker}'
     if args.withRPNMask:
         # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gc{args.gl}_ctx{args.context}_2layers'
-        folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gc{args.gl}_ctx{args.context}_2layers_bn_softmax_step20_art_gl_leakyrelu'
+        # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gc{args.gl}_ctx{args.context}_2layers_bn_softmax_step20_art_gl_leakyrelu'
+        # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gc{args.gl}_ctx{args.context}_2layers_bn_softmax_step20_art'
+        # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gl{args.gl}_ctx{args.context}_2layers_bn_softmax_art'
+        folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gl{args.gl}_ctx{args.context}_2layers_bn_softmax_art_nopool_update'
     else:
         # FPN Pixel attention mask
         # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
         # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_minsize{args.input_size}_MASK{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}' 
         # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gc{args.gl}_ctx{args.context}_2layers'
-        folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gc{args.gl}_ctx{args.context}_2layers_bn_softmax_step20'
+        folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gl{args.gl}_ctx{args.context}_2layers_bn_softmax_step20'
       
     args.weight_dir = args.weight_dir.format(cmt_seed, folder_name)
     args.log_dir = args.log_dir.format(cmt_seed, folder_name)

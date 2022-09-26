@@ -49,15 +49,15 @@ class FasterRCNNBase(nn.Module):
         self._has_warned = False
 
     @torch.jit.unused
-    def eager_outputs(self, losses, detections, lc_domain_results): #, gl_domain_results
-        # type: (Dict[str, Tensor], List[Dict[str, Tensor]], list[Dict[str, Tensor]], list[Dict[str, Tensor]]) -> Union[Dict[str, Tensor], List[Dict[str, Tensor]], List[Dict[str, Tensor]] , list[Dict[str, Tensor]]]
+    def eager_outputs(self, losses, detections): #, lc_domain_results, gl_domain_results
+        # type: (Dict[str, Tensor], List[Dict[str, Tensor]]) -> Union[Dict[str, Tensor], List[Dict[str, Tensor]]]
         if self.training:
-            return losses, lc_domain_results#, gl_domain_results
+            return losses #, lc_domain_results#, gl_domain_results
 
         return detections
 
-    def forward(self, images, targets=None, masks=None, is_target=False, la_weight=1.0, ga_weight=1.0):
-        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]], List[Tensor], bool, float, float) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]], Dict[str, Tensor], bool]
+    def forward(self, images, targets=None, masks=None, is_target=False, la_weight=1.0, ga_weight=1.0, eta=1.0):
+        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]], List[Tensor], bool, float, float,float) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]], Dict[str, Tensor], bool]
         """
         Arguments:
             images (list[Tensor]): images to be processed
@@ -103,10 +103,10 @@ class FasterRCNNBase(nn.Module):
         #tag: local alignment for each layer
         if self.la is not None:
             if is_target:
-                lc_domain_results = self.la(features, None, is_target, la_weight)   
-                return lc_domain_results
+                lc_domain_loss= self.la(features, None, is_target, la_weight, eta=eta)   
+                return lc_domain_loss
             else:
-                 _, lc_domain_results, lc_features = self.la(features, masks, is_target, la_weight)
+                 _, lc_domain_loss, lc_features = self.la(features, masks, is_target, la_weight, eta=eta)
 
         losses = {}
         # 将特征层以及标注target信息传入rpn中
@@ -132,15 +132,17 @@ class FasterRCNNBase(nn.Module):
         
         losses.update(detector_losses)
         losses.update(proposal_losses)
+        # tag: yang adds, update lc source loss
+        losses.update(lc_domain_loss)
         
         if torch.jit.is_scripting():
             if not self._has_warned:
                 warnings.warn("RCNN always returns a (Losses, Detections) tuple in scripting")
                 self._has_warned = True
-                return losses, lc_domain_results # detections, 
+                return losses#, lc_domain_loss # detections, 
         else:
             # return self.eager_outputs(losses, lc_domain_results, gl_domain_results) # losses, detections, lc_domain_results, gl_domain_results
-            return self.eager_outputs(losses, detections, lc_domain_results) # , gl_domain_results
+            return self.eager_outputs(losses, detections) # , gl_domain_results , lc_domain_loss
 
 
 class TwoMLPHead(nn.Module):
