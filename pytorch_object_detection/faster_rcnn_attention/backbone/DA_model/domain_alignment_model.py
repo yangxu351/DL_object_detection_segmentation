@@ -62,9 +62,10 @@ class Local_Alignment(nn.Module):
         self.context = context
         self.lc_blocks = netD_pixel(in_channels, context=self.context)
 
-    def forward(self, features, masks=None, is_target=False, la_weight=1.0):
+    def forward(self, features, masks=None, is_target=False, la_weight=1.0, eta=1.0):
         lc_domain_results = {}
         lc_features = {}
+        la_loss = []
         la_weight = Variable(torch.tensor(la_weight))
         for k, feat in features.items():
             if self.lc and k != 'pool': #  and (k == '3' or k == '2'):
@@ -93,11 +94,21 @@ class Local_Alignment(nn.Module):
                         msk=soft_msk
                     d_pixel = d_pixel*msk
                 lc_domain_results[k] = d_pixel
-
+        
         if is_target:
-            return lc_domain_results
+            for k,v in lc_domain_results.items():
+                dloss_lc_t = 0.5 * torch.mean((1 - v) ** 2) # 0.1191
+                # target adv loss
+                la_loss.append(dloss_lc_t)
+            la_loss_dict = {'loss_lc_t':torch.mean(torch.stack(la_loss))*eta}
+            return la_loss_dict
         else:
-            return features, lc_domain_results, lc_features
+            for k,v in lc_domain_results.items():
+                dloss_lc_s = 0.5 * torch.mean(v ** 2)
+                # source adv loss
+                la_loss.append(dloss_lc_s) # 0.048
+            la_loss_dict = {'loss_lc_s':torch.mean(torch.stack(la_loss))*eta}
+            return features, la_loss_dict, lc_features
 
 
 
