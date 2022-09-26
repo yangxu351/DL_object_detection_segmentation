@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable,Function
 
 from torchvision.ops import MultiScaleRoIAlign
-from backbone.DA_model.domain_alignment_model import Domain_Alignment
+from backbone.DA_model.domain_alignment_model import Domain_Alignment, Local_Alignment, Global_Alignment
 from backbone.resnet50_fpn_DA_global_local import BackboneWithFPN
 
 # from .roi_head import RoIHeads
@@ -20,7 +20,6 @@ from .transform import GeneralizedRCNNTransform
 from .rpn_function_ART import AnchorsGenerator, RPNHead, RegionProposalNetwork, RPNMaskwithFeaturesHead
 from .mask_head import MaskHead
 from .focal_loss import FocalLoss as FL
-from backbone.DA_model.model_global_local import netD, netD_pixel
 
 class FasterRCNNBase(nn.Module):
     """
@@ -35,7 +34,7 @@ class FasterRCNNBase(nn.Module):
             the model
     """
 
-    def __init__(self, backbone, rpn, roi_heads, transform, mask_head=None, withRPNMask=False, domain_align=None):  # 
+    def __init__(self, backbone, rpn, roi_heads, transform, mask_head=None, withRPNMask=False, la=None, ga=None):  # 
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
         self.backbone = backbone
@@ -43,21 +42,22 @@ class FasterRCNNBase(nn.Module):
         self.roi_heads = roi_heads
         self.mask_head = mask_head
         self.withRPNMask = withRPNMask
-        self.domain_align = domain_align
+        self.la = la
+        self.ga = ga
         
         # used only on torchscript mode
         self._has_warned = False
 
     @torch.jit.unused
-    def eager_outputs(self, losses, detections, lc_domain_results, gl_domain_results):
+    def eager_outputs(self, losses, detections, lc_domain_results): #, gl_domain_results
         # type: (Dict[str, Tensor], List[Dict[str, Tensor]], list[Dict[str, Tensor]], list[Dict[str, Tensor]]) -> Union[Dict[str, Tensor], List[Dict[str, Tensor]], List[Dict[str, Tensor]] , list[Dict[str, Tensor]]]
         if self.training:
-            return losses, lc_domain_results, gl_domain_results
+            return losses, lc_domain_results#, gl_domain_results
 
         return detections
 
-    def forward(self, images, targets=None, masks=None, is_target=False, alpha=1.0):
-        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]], List[Tensor], bool, float) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]], Dict[str, Tensor], bool]
+    def forward(self, images, targets=None, masks=None, is_target=False, la_weight=1.0, ga_weight=1.0):
+        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]], List[Tensor], bool, float, float) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]], Dict[str, Tensor], bool]
         """
         Arguments:
             images (list[Tensor]): images to be processed
@@ -100,24 +100,26 @@ class FasterRCNNBase(nn.Module):
         if isinstance(features, torch.Tensor):  # 若只在一层特征层上预测，将feature放入有序字典中，并编号为‘0’
             features = OrderedDict([('0', features)])  # 若在多层特征层上预测，传入的就是一个有序字典
         
+        #tag: local alignment for each layer
+        if self.la is not None:
+            if is_target:
+                lc_domain_results = self.la(features, None, is_target, la_weight)   
+                return lc_domain_results
+            else:
+                 _, lc_domain_results, lc_features = self.la(features, masks, is_target, la_weight)
+
         losses = {}
         # 将特征层以及标注target信息传入rpn中
         # proposals: List[Tensor], Tensor_shape: [num_proposals, 4],
         # 每个proposals是绝对坐标，且为(x1, y1, x2, y2)格式
         if self.withRPNMask and masks is not None:
-            # tag: yang add the mask filtered features 
             proposals, proposal_losses, art_features = self.rpn(images, features, targets, masks)
-            for k, feat in art_features.items():
-                features[k] = features[k] * feat
-            del art_features
         else: 
             proposals, proposal_losses = self.rpn(images, features, targets)
 
-        # tag: yang adds domain alignment with ART
-        if not is_target:
-            features, lc_domain_results, lc_features, gl_domain_results, gl_features = self.domain_align(features, is_target, alpha)
-            # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
-            detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+        # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
+        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+        # if not is_target:
             # fixme: whether to use context information
             #tag: yang add lc context + gc context
             # if len(lc_features) and len(gc_features):
@@ -125,28 +127,20 @@ class FasterRCNNBase(nn.Module):
             # else:
             #     detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
 
-            # 对网络的预测结果进行后处理（主要将bboxes还原到原图像尺度上）
-            detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
-            
-            losses.update(detector_losses)
-            losses.update(proposal_losses)
-        else:
-            lc_domain_results, gl_domain_results = self.domain_align(features, is_target, alpha)
+        # 对网络的预测结果进行后处理（主要将bboxes还原到原图像尺度上）
+        detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
+        
+        losses.update(detector_losses)
+        losses.update(proposal_losses)
         
         if torch.jit.is_scripting():
             if not self._has_warned:
                 warnings.warn("RCNN always returns a (Losses, Detections) tuple in scripting")
                 self._has_warned = True
-            if is_target:
-                return lc_domain_results, gl_domain_results
-            else:
-                return losses, lc_domain_results, gl_domain_results # detections, 
+                return losses, lc_domain_results # detections, 
         else:
             # return self.eager_outputs(losses, lc_domain_results, gl_domain_results) # losses, detections, lc_domain_results, gl_domain_results
-            if is_target:
-                return self.eager_outputs(None, None, lc_domain_results, gl_domain_results)
-            else:
-                return self.eager_outputs(losses, detections, lc_domain_results, gl_domain_results)
+            return self.eager_outputs(losses, detections, lc_domain_results) # , gl_domain_results
 
 
 class TwoMLPHead(nn.Module):
@@ -371,7 +365,15 @@ class FasterRCNN(FasterRCNNBase):
         self.lc = lc
         self.gl = gl
         self.context = context
-        domain_align = Domain_Alignment(in_channels=out_channels, lc=self.lc, gl=self.gl, context=self.context)
+        self.soft_val = soft_val
+        if self.lc:
+            la = Local_Alignment(in_channels=out_channels, lc=self.lc, context=self.context, soft_val=self.soft_val)
+        else:
+            la = None
+        if self.gl:
+            ga = Global_Alignment(in_channels=out_channels, gl=self.gl, context=self.context)
+        else:
+            ga = None
 
         # fast RCNN中roi pooling后的展平处理两个全连接层部分
         if box_head is None:
@@ -416,7 +418,7 @@ class FasterRCNN(FasterRCNNBase):
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
         
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head=mask_head, withRPNMask=withRPNMask, domain_align=domain_align)  #
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, mask_head=mask_head, withRPNMask=withRPNMask, la=la, ga=ga)  #
 
 
 
