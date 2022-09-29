@@ -306,13 +306,13 @@ class RPNMaskwithFeaturesHead(nn.Module):
 
                 rl_feat = F.relu(self.conv(feature))
                 t = rl_feat*msk
-                # fixme:
-                features[k] = t
+                # fixme: 1
+                # features[k] = t
             else:
                 t = F.relu(self.conv(feature))
             
-            #fixme:
-            # features[k] = t
+            #fixme:2
+            features[k] = t
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         if masks is not None:
