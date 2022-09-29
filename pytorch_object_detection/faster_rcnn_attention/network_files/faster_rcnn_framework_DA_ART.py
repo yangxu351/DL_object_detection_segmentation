@@ -16,10 +16,9 @@ from backbone.resnet50_fpn_DA_global_local import BackboneWithFPN
 from network_files.roi_head_DA_context import RoIHeads
 from parameters import WITH_RPN_MASK
 from .transform import GeneralizedRCNNTransform
-# from .rpn_function import AnchorsGenerator, RPNHead, RegionProposalNetwork, RPNMaskHead
-from .rpn_function_ART import AnchorsGenerator, RPNHead, RegionProposalNetwork, RPNMaskwithFeaturesHead
-from .mask_head import MaskHead
-from .focal_loss import FocalLoss as FL
+from .rpn_function import AnchorsGenerator, RPNHead, RegionProposalNetwork
+from .rpn_function_ART import RPNMaskwithFeaturesHead
+
 
 class FasterRCNNBase(nn.Module):
     """
@@ -99,7 +98,7 @@ class FasterRCNNBase(nn.Module):
         features = self.backbone(images.tensors)  # 将图像输入backbone得到特征图
         if isinstance(features, torch.Tensor):  # 若只在一层特征层上预测，将feature放入有序字典中，并编号为‘0’
             features = OrderedDict([('0', features)])  # 若在多层特征层上预测，传入的就是一个有序字典
-        
+
         #tag: local alignment for each layer
         if self.la is not None:
             if is_target:
@@ -118,7 +117,8 @@ class FasterRCNNBase(nn.Module):
             proposals, proposal_losses = self.rpn(images, features, targets)
 
         # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
-        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+        # detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+        detections, detector_losses = self.roi_heads(art_features, proposals, images.image_sizes, targets)
         # if not is_target:
             # fixme: whether to use context information
             #tag: yang add lc context + gc context
@@ -324,6 +324,7 @@ class FasterRCNN(FasterRCNNBase):
             rpn_anchor_generator = AnchorsGenerator(
                 anchor_sizes, aspect_ratios
             )
+
 
         # 生成RPN通过滑动窗口预测网络部分
         if rpn_head is None:
