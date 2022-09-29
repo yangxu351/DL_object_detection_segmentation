@@ -126,8 +126,8 @@ class FasterRCNNBase(nn.Module):
             proposals, proposal_losses = self.rpn(images, features, targets)
 
         # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
-        # detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
-        detections, detector_losses = self.roi_heads(art_features, proposals, images.image_sizes, targets)
+        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+        # detections, detector_losses = self.roi_heads(art_features, proposals, images.image_sizes, targets)
         # if not is_target:
             # fixme: whether to use context information
             #tag: yang add lc context + gc context
