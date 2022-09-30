@@ -93,7 +93,7 @@ def main(parser_data, syn_dir_args, real_dir_args):
     # if train_syn:
     data_imgs_dir = syn_dir_args.syn_data_imgs_dir
     voc_annos_dir = syn_dir_args.syn_voc_annos_dir
-    if parser_data.withPA or parser_data.withFPNMask or parser_data.withRPNMask:
+    if parser_data.withPA or parser_data.withFPNMask or parser_data.withRPNMask or parser_data.withMaskFeature:
         data_segs_dir = syn_dir_args.syn_data_segs_dir
     else: 
         data_segs_dir = ''
@@ -486,6 +486,9 @@ if __name__ == "__main__":
         # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gc{args.gl}_ctx{args.context}_2layers_bn_softmax_step20_art'
         # folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gl{args.gl}_ctx{args.context}_2layers_bn_softmax_art'
         folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_RPN_Mask{args.withRPNMask}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gl{args.gl}_ctx{args.context}_2layers_bn_softmax_art_nopool_update'
+        
+    elif args.withMaskFeature:
+        folder_name = f'{time_marker}_lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MaskFeat{args.withMaskFeature}_softval{args.soft_val}_eta{args.eta}_lc{args.lc}_gl{args.gl}_ctx{args.context}_2layers_bn_softmax_art_nopool_update'
     else:
         # FPN Pixel attention mask
         # folder_name = f'lr{args.lr}_bs{args.batch_size}_{args.epochs}epochs_MASK{args.withFPNMask}_softval{args.soft_val}_{time_marker}' 
