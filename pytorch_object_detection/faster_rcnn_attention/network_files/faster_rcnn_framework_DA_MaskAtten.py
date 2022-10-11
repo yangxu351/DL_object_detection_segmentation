@@ -53,7 +53,7 @@ class FasterRCNNBase(nn.Module):
 
     @torch.jit.unused
     def eager_outputs(self, losses, detections): #, lc_domain_results, gl_domain_results
-        # type: (Dict[str, Tensor], List[Dict[str, Tensor]]) -> Union[Dict[str, Tensor], List[Dict[str, Tensor]]]
+        # type: (Dict[str, Tensor],Dict[str, Tensor], List[Dict[str, Tensor]]) -> Union[Dict[str, Tensor], List[Dict[str, Tensor]]]
         if self.training:
             return losses #, lc_domain_results#, gl_domain_results
 
@@ -105,7 +105,7 @@ class FasterRCNNBase(nn.Module):
 
         #tag: features with mask attention
         if self.feat_attention:
-            features = self.feat_attention(features, layer_levels=['0', '1', '2', '3'], masks=masks)
+            features = self.feat_attention(features, masks=masks)
         
         #tag: local alignment for each layer
         if self.la is not None:
@@ -142,13 +142,15 @@ class FasterRCNNBase(nn.Module):
         losses.update(detector_losses)
         losses.update(proposal_losses)
         # tag: yang adds, update lc source loss
-        losses.update(lc_domain_loss)
+        if self.la:
+            # da_losses.update(lc_domain_loss)
+            losses.update(lc_domain_loss)
         
         if torch.jit.is_scripting():
             if not self._has_warned:
                 warnings.warn("RCNN always returns a (Losses, Detections) tuple in scripting")
                 self._has_warned = True
-                return losses#, lc_domain_loss # detections, 
+                return losses #, lc_domain_loss # detections, 
         else:
             # return self.eager_outputs(losses, lc_domain_results, gl_domain_results) # losses, detections, lc_domain_results, gl_domain_results
             return self.eager_outputs(losses, detections) # , gl_domain_results , lc_domain_loss
@@ -303,7 +305,7 @@ class FasterRCNN(FasterRCNNBase):
                  box_batch_size_per_image=512, box_positive_fraction=0.25,  # fast rcnn计算误差时采样的样本数，以及正样本占所有样本的比例
                  bbox_reg_weights=None,
                  # mask parameters
-                 mask_head=None, withRPNMask=False, soft_val=1., lc=False, gl=False, context=False, withMaskFeature=False):
+                 mask_head=None, withRPNMask=False, soft_val=1., lc=False, gl=False, context=False, withMaskFeature=False, layer_levels=['0', '1', '2', '3']):
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
                 "backbone should contain an attribute out_channels"
@@ -336,7 +338,9 @@ class FasterRCNN(FasterRCNNBase):
 
         #tag: Mask Attention with Features
         if withMaskFeature:
-            feat_attention = MaskAttention(soft_val)
+            feat_attention = MaskAttention(soft_val, layer_levels=layer_levels)
+        else:
+            feat_attention = None
 
         # 生成RPN通过滑动窗口预测网络部分
         if rpn_head is None:
