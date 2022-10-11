@@ -3,13 +3,14 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 class MaskAttention(nn.Module):
-    def __init__(self, soft_val=1.0):
+    def __init__(self, soft_val=1.0, layer_levels=['0', '1', '2', '3']):
         super(MaskAttention, self).__init__()
         self.soft_val = soft_val
+        self.layer_levels = layer_levels
     
-    def forward(self, features, layer_levels=['0', '1'], masks=None):
+    def forward(self, features, masks=None):
         for k, feat in features.items():
-            if masks is not None and k in layer_levels:
+            if masks is not None and k in self.layer_levels:
                 feat_shape = feat.shape[-2:]
                 msk = F.interpolate(masks, size=feat_shape, mode="nearest")
                 if self.soft_val == -1:
